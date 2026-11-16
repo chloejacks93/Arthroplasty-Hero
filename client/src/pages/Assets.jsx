@@ -1,0 +1,131 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Search, QrCode } from 'lucide-react';
+import { useApi } from '../lib/useApi.js';
+import { qs } from '../lib/api.js';
+import { useAuth, isOrgWide } from '../lib/auth.jsx';
+import { DataTable, Pager } from '../components/DataTable.jsx';
+import { StatusBadge } from '../components/StatusBadge.jsx';
+import { STATUS, ASSET_TYPE, relTime } from '../lib/format.js';
+
+const FILTER_KEYS = ['q', 'status', 'asset_type', 'team_id', 'facility_id', 'rep_id', 'attention', 'mine'];
+
+export default function Assets() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const meta = useApi('/meta').data;
+
+  const state = useMemo(() => Object.fromEntries([
+    ...FILTER_KEYS.map((k) => [k, params.get(k) || '']),
+    ['sort', params.get('sort') || 'reference'],
+    ['dir', params.get('dir') || 'asc'],
+    ['page', Number(params.get('page') || 1)],
+  ]), [params]);
+
+  // Debounced local search box, synced to URL.
+  const [q, setQ] = useState(state.q);
+  useEffect(() => setQ(state.q), [state.q]);
+  useEffect(() => {
+    if (q === state.q) return undefined;
+    const t = setTimeout(() => update({ q }), 250);
+    return () => clearTimeout(t);
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function update(patch, resetPage = true) {
+    const next = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(patch)) (v ? next.set(k, v) : next.delete(k));
+    if (resetPage && !('page' in patch)) next.delete('page');
+    setParams(next, { replace: true });
+  }
+
+  const { data, loading, error } = useApi(`/assets${qs({ ...state, pageSize: 50 })}`);
+  const onSort = (key) => update({ sort: key, dir: state.sort === key && state.dir === 'asc' ? 'desc' : 'asc' });
+  const hasFilters = FILTER_KEYS.some((k) => state[k]);
+  const reps = meta?.users.filter((u) => u.role === 'rep') || [];
+
+  const columns = [
+    { key: 'reference', header: 'Asset', sortKey: 'reference', mobile: 'primary', render: (r) => (
+      <span className="stacked">
+        <span className="cell-primary">{r.reference}</span>
+        <span className="cell-sub"><span className="mono">{r.asset_code}</span>{r.description ? ` · ${r.description}` : ''}</span>
+      </span>
+    ) },
+    { key: 'asset_type', header: 'Type', sortKey: 'asset_type', mobile: 'hide', render: (r) => <span className="tag">{ASSET_TYPE[r.asset_type]}</span> },
+    { key: 'status', header: 'Status', sortKey: 'status', mobile: 'status', render: (r) => <StatusBadge status={r.status} /> },
+    { key: 'facility', header: 'Current location', sortKey: 'facility', mobile: 'full', label: 'Location', className: 'trunc',
+      render: (r) => r.facility_name || <span className="subtle">Unassigned</span> },
+    { key: 'rep', header: 'Representative', sortKey: 'rep', mobile: 'full', label: 'Rep', className: 'trunc',
+      render: (r) => r.rep_name || <span className="subtle">Unassigned</span> },
+    ...(isOrgWide(user) ? [{ key: 'team', header: 'Team', sortKey: 'team', mobile: 'hide', className: 'trunc', render: (r) => r.team_name || <span className="subtle">—</span> }] : []),
+    { key: 'lot', header: 'Lot', sortKey: 'lot', mobile: 'hide', render: (r) => r.lot ? <span className="mono">{r.lot}</span> : <span className="subtle">—</span> },
+    { key: 'qr', header: 'QR', mobile: 'hide', render: (r) => r.qr_value
+      ? <QrCode size={15} strokeWidth={1.75} style={{ color: 'var(--green)' }} aria-label="QR linked" />
+      : <span className="subtle" title="No QR code linked yet">—</span> },
+    { key: 'last_scanned_at', header: 'Last scan', sortKey: 'last_scanned_at', align: 'right', mobile: 'hide',
+      render: (r) => <span className="muted">{relTime(r.last_scanned_at)}</span> },
+  ];
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <h1>Asset registry</h1>
+          <p>{isOrgWide(user) ? 'Every registered tray, tote and set across the organization.' : 'Assets in your teams and custody.'}</p>
+        </div>
+      </div>
+
+      <section className="panel table-panel">
+        <div className="toolbar">
+          <div className="search">
+            <Search aria-hidden />
+            <input className="input" placeholder="Search name, QR UUID, lot, serial…" value={q}
+              onChange={(e) => setQ(e.target.value)} aria-label="Search assets" enterKeyHint="search" />
+          </div>
+          <select className="select select-sm" value={state.status} onChange={(e) => update({ status: e.target.value, attention: '' })} aria-label="Status">
+            <option value="">All statuses</option>
+            {Object.entries(STATUS).map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}
+          </select>
+          <select className="select select-sm" value={state.asset_type} onChange={(e) => update({ asset_type: e.target.value })} aria-label="Type">
+            <option value="">All types</option>
+            {Object.entries(ASSET_TYPE).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </select>
+          <select className="select select-sm" value={state.facility_id} onChange={(e) => update({ facility_id: e.target.value })} aria-label="Facility">
+            <option value="">All locations</option>
+            {meta?.facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+          {isOrgWide(user) && (
+            <>
+              <select className="select select-sm" value={state.team_id} onChange={(e) => update({ team_id: e.target.value })} aria-label="Team">
+                <option value="">All teams</option>
+                {meta?.teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+              <select className="select select-sm" value={state.rep_id} onChange={(e) => update({ rep_id: e.target.value })} aria-label="Representative">
+                <option value="">All reps</option>
+                {reps.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+              </select>
+            </>
+          )}
+          {hasFilters && <button className="chip-clear" onClick={() => setParams({}, { replace: true })}>Clear filters</button>}
+          {state.attention && <span className="tag">Requires attention</span>}
+        </div>
+
+        {error && <div className="notice red" style={{ margin: 14 }}>{error.message}</div>}
+
+        <DataTable
+          columns={columns}
+          rows={data?.items}
+          loading={loading}
+          sort={state.sort}
+          dir={state.dir}
+          onSort={onSort}
+          onRowClick={(r) => navigate(`/assets/${r.id}`)}
+          empty={hasFilters
+            ? { title: 'No matching assets', body: 'Try a different search or clear the filters.' }
+            : { title: 'No assets registered yet', body: 'Assets will appear here once spreadsheets are imported.' }}
+        />
+        {data && <Pager page={data.page} pageSize={data.pageSize} total={data.total} onPage={(p) => update({ page: String(p) }, false)} />}
+      </section>
+    </>
+  );
+}
