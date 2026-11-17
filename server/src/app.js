@@ -103,6 +103,11 @@ export function createApp() {
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, _next) => {
     if (err instanceof HttpError) {
+      // Log rejected actions (not routine "not signed in" checks) so problems are
+      // visible in the hosting logs. Messages are user-facing text, never secrets.
+      if (err.status !== 401 && req.method !== 'GET') {
+        console.log(`[api] ${err.status} ${req.method} ${req.originalUrl.split('?')[0]}${req.user ? ` by ${req.user.email}` : ''}: ${err.message}`);
+      }
       return res.status(err.status).json({ error: err.message, details: err.details });
     }
     if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'Malformed JSON body.' });

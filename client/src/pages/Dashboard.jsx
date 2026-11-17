@@ -4,6 +4,7 @@ import { useApi, useMeta } from '../lib/useApi.js';
 import { useAuth, isOrgWide } from '../lib/auth.jsx';
 import { StatusBadge } from '../components/StatusBadge.jsx';
 import { DataTable } from '../components/DataTable.jsx';
+import { PendingImports } from '../components/PendingImports.jsx';
 import { EVENT_LABEL, fmtNum, relTime, ASSET_TYPE } from '../lib/format.js';
 
 const EVENT_ICON = {
@@ -28,6 +29,7 @@ export default function Dashboard() {
 
   return (
     <>
+      <PendingImports />
       <div className="page-head">
         <div>
           <h1>{orgWide ? 'Operations overview' : `Good ${greeting()}, ${firstName}`}</h1>

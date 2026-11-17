@@ -53,7 +53,13 @@ router.post('/', receive, async (req, res) => {
   const parsed = [];
   for (const [i, f] of files.entries()) {
     const filename = Buffer.from(f.originalname, 'latin1').toString('utf8').replace(/[\\/]/g, '_').slice(0, 200);
-    const sheet = await readSpreadsheet(f.buffer, filename);
+    let sheet;
+    try {
+      sheet = await readSpreadsheet(f.buffer, filename);
+    } catch (e) {
+      console.log(`[import] upload rejected (${filename}): ${e.message}`);
+      throw e;
+    }
     if (!sheet.rows.length) throw badRequest(`"${filename}" has a header row but no data rows.`);
     const headerMap = Object.fromEntries(sheet.headers.map((h) => [h, COLUMN_MAP[headerKey(h)]?.field || null]));
     parsed.push({
@@ -90,6 +96,7 @@ router.post('/', receive, async (req, res) => {
     }
     return b.id;
   });
+  console.log(`[import] preview created by ${req.user.email}: ${parsed.map((p) => `${p.filename} (${p.sheet.rows.length} rows)`).join(', ')}. Waiting for approval.`);
   res.status(201).json({ batchId });
 });
 
@@ -245,7 +252,14 @@ router.put('/batches/:id/decisions', async (req, res) => {
 // ---------------------------------------------------------------------
 router.post('/batches/:id/commit', async (req, res) => {
   const id = parse(z.uuid(), req.params.id);
-  const result = await commitBatch(id, req.user);
+  let result;
+  try {
+    result = await commitBatch(id, req.user);
+  } catch (e) {
+    console.log(`[import] approval failed for batch ${id}: ${e.message}`);
+    throw e;
+  }
+  console.log(`[import] approved by ${req.user.email}: ${result.new} new, ${result.update + result.conflict} updated, ${result.duplicate} duplicates, ${result.conflictsCreated} conflicts.`);
   res.json({ ok: true, result });
 });
 

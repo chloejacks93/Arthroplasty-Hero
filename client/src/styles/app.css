@@ -890,3 +890,18 @@ table.data td.wrap-cell { white-space: normal; min-width: 180px; max-width: 320p
 
 .bulk-bar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--primary-soft); border-bottom: 1px solid var(--blue-line); font-size: 13px; }
 table.data tbody tr.selected { background: #f1f5fd; }
+
+/* Sticky approval bar on the import review screen */
+.approve-bar {
+  position: sticky; bottom: 12px; z-index: 15; margin-top: 20px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 12px 16px; border-radius: 10px; background: var(--nav-bg); color: #dbe3ee;
+  box-shadow: var(--shadow-pop);
+}
+.approve-bar strong { color: #fff; }
+.approve-bar .btn:not(.btn-primary) { background: transparent; color: #dbe3ee; border-color: rgba(255,255,255,0.2); box-shadow: none; }
+@media (max-width: 640px) {
+  .approve-bar { flex-direction: column; align-items: stretch; bottom: 8px; }
+  .approve-bar .seg { flex-direction: column-reverse; }
+  .approve-bar .btn { width: 100%; }
+}

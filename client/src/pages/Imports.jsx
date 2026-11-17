@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Upload } from 'lucide-react';
 import { useApi } from '../lib/useApi.js';
+import { PendingImports } from '../components/PendingImports.jsx';
 import { DataTable } from '../components/DataTable.jsx';
 import { fmtDateTime, fmtNum } from '../lib/format.js';
 
@@ -12,6 +13,7 @@ export default function Imports() {
 
   return (
     <>
+      <PendingImports />
       <div className="page-head">
         <div>
           <h1>Spreadsheet imports</h1>

@@ -67,7 +67,7 @@ export default function ImportBatch() {
     setConfirm(null);
     refreshMeta();
   }).finally(() => setConfirm(null));
-  const cancel = () => run(async () => { await api.post(`/imports/batches/${id}/cancel`); setConfirm(null); });
+  const cancel = () => run(async () => { await api.post(`/imports/batches/${id}/cancel`); setConfirm(null); refreshMeta(); });
 
   return (
     <>
@@ -225,6 +225,21 @@ export default function ImportBatch() {
           </div>
         )}
       </section>
+
+      {isPreview && (
+        <div className="approve-bar" role="region" aria-label="Approve import">
+          <span>
+            <strong>Not saved yet.</strong>{' '}
+            {counts.review ? `Decide ${counts.review} row${counts.review > 1 ? 's' : ''} first, then approve.` : `Approve to add ${fmtNum(s.new)} new asset${s.new === 1 ? '' : 's'} to the registry.`}
+          </span>
+          <div className="seg">
+            <button className="btn" disabled={busy} onClick={() => setConfirm('cancel')}>Discard</button>
+            <button className="btn btn-primary btn-lg" disabled={busy || counts.review > 0 || loading} onClick={() => setConfirm('commit')}>
+              <CheckCircle2 aria-hidden /> Approve import
+            </button>
+          </div>
+        </div>
+      )}
 
       {confirm === 'commit' && (
         <Modal title="Approve this import?" onClose={() => setConfirm(null)}

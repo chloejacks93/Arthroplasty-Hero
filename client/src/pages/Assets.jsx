@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, QrCode, Download, UserCheck, CheckCircle2 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { Modal } from '../components/Modal.jsx';
+import { PendingImports } from '../components/PendingImports.jsx';
 import { useApi } from '../lib/useApi.js';
 import { qs } from '../lib/api.js';
 import { useAuth, isOrgWide } from '../lib/auth.jsx';
@@ -75,6 +76,7 @@ export default function Assets() {
 
   return (
     <>
+      <PendingImports />
       <div className="page-head">
         <div>
           <h1>Asset registry</h1>
