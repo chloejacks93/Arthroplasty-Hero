@@ -150,7 +150,7 @@ export default function Dashboard() {
               {data?.byFacility.map((f) => {
                 const max = data.byFacility[0]?.count || 1;
                 return (
-                  <Link key={f.id} to={`/assets?facility_id=${f.id}`} className={`bar-row${f.facility_type === 'warehouse' ? ' warehouse' : ''}`}>
+                  <Link key={f.id} to={`/facilities/${f.id}`} className={`bar-row${f.facility_type === 'warehouse' ? ' warehouse' : ''}`}>
                     <span className="name">{f.name}{f.exceptions > 0 && <span className="exc">{f.exceptions} exception{f.exceptions > 1 ? 's' : ''}</span>}</span>
                     <span className="val">{f.count}</span>
                     <span className="bar-track"><span className="bar-fill" style={{ width: `${(f.count / max) * 100}%`, display: 'block' }} /></span>

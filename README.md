@@ -212,4 +212,45 @@ The source data showed that a catalog + serial identifies an **instrument set, n
   - **Report:** a damage report is created from a scan.
   - No page errors.
 
-**Not yet built (later phases):** admin screens for users, teams and facilities (5), audits and utilization reports (6), notification preferences, email/push and installable PWA (7).
+### Phase 5: Facility, team and representative management ✅
+
+**Facilities** (everyone; sidebar → Directory):
+- **Directory:** every warehouse, hospital and surgery center with assets, trays/totes, reps, incoming transfers and exceptions. Search, type and status filters.
+- **Facility page:** address and phone, and figures for assets here, incoming and outgoing in-transit, on cases, missing, overdue and consignment fees. Tabs:
+  - **Assets:** filter by type, status, team and rep.
+  - **Incoming / outgoing transfers.**
+  - **Representatives:** tap-to-call phone numbers.
+- **Visibility:** reps see counts for their own scope only (stated on the page).
+- **Admins:** add, edit and deactivate facilities. A facility that still holds assets or has transfers heading to it can't be deactivated.
+
+**Teams** (management): members, assets, trays/totes, in transit and exceptions per team. Admins add, rename and deactivate teams; deactivated teams keep their assets but disappear from pickers. Team names are unique (case-insensitive) and nothing is hard-coded.
+
+**People** (management views; administrators change):
+- **Add a person** with name, email, role (with a plain-language description), mobile, title and teams. A **temporary password** (e.g. `bbqx-udnz-msmq`) is generated and shown **once**, with a *Copy sign-in details* button. The person **must set their own password at first sign-in**; nothing else works until they do.
+- **Edit, reset password, deactivate and reactivate.** Deactivating or changing someone's role signs them out on every device.
+- **Guardrails:**
+  - You can't deactivate or demote yourself.
+  - You can't remove the last active administrator.
+  - You can't deactivate someone who still has transfers in transit to them.
+- **Your account:** click your name in the sidebar to change your password (other devices are signed out).
+
+**Asset responsibility** (management): *Edit assignment* on an asset sets its assigned rep, team and home warehouse. **Bulk assignment:** tick rows in the Asset Registry (or select all on a page) and assign a rep and/or team in one step. Every changed asset gets its own history entry and note. Locations are never edited here; they change only through a transfer or an investigation.
+
+**Permanent change log:** every user, team, facility and assignment change is written to an append-only `admin_audit` table (who, what changed from → to, when). Updates, deletes and truncation are blocked by triggers.
+
+**Tested**
+- **62 automated tests** (9 new) covering:
+  - **Accounts:** creation with a one-time temporary password, duplicate email, the forced password change gate (every API refused until changed; the new password must differ), the edit and team-membership history, and the immutable change log.
+  - **Guardrails:** self, last admin and open-transfer deactivation, plus sign-out everywhere on deactivation; password reset; team uniqueness and deactivation hiding.
+  - **Facilities:** scoped counts and detail, and deactivation guarded by assets.
+  - **Permissions:** managers view, only admins change.
+  - **Assignment:** single (with home-warehouse validation) and bulk (rolls back entirely on any bad ID).
+- **Browser end-to-end on your imported data:**
+  - **Directory and editing:** facility directory (9 facilities) and Park Ridge Medical Center's detail; editing its address; Teams.
+  - **New rep:** adding Jamie Rivera to CHATT-LOOKOUT LEGENDS with a temporary password. On an iPhone viewport, Jamie is forced to set a password, then lands on the six-button home screen.
+  - **Assignment:** reassigning SMS-AUGMENTED MGS INSTR #12 to Jamie (it appears in Jamie's *My assets*), then bulk-assigning all 14 Park Ridge trays to one rep.
+  - **Deactivation:** deactivating Jamie immediately signs them out.
+
+**Imported data note:** the source spreadsheets have no representative column, so all imported assets start **Unassigned**. Use bulk assignment (filter by facility or team, select, assign) to set reps once their accounts exist.
+
+**Not yet built (later phases):** audits, case assignments and utilization reports (6), notification preferences, email/push and installable PWA (7).

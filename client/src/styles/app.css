@@ -869,3 +869,24 @@ table.import-rows td.details-cell { white-space: normal; min-width: 300px; }
 .as-meta svg:not(:first-child) { margin-left: 0; }
 table.data td.wrap-cell { white-space: normal; min-width: 180px; max-width: 320px; line-height: 1.35; padding-top: 8px; padding-bottom: 8px; }
 .route { flex-wrap: wrap; }
+
+/* ---------------------------------------------------------------------
+   Phase 5 — directory & administration
+   --------------------------------------------------------------------- */
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.form-grid .span2 { grid-column: 1 / -1; }
+.team-checks { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
+.team-checks legend { font-size: 12.5px; font-weight: 500; margin-bottom: 8px; padding: 0; }
+.secret { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: var(--radius); background: var(--surface-sunken); border: 1px solid var(--border); }
+.secret .mono { font-size: 17px; letter-spacing: 0.04em; color: var(--text); }
+.user-chip .who { color: inherit; border-radius: 4px; }
+.user-chip .who:hover strong { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
+.modal { max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
+.modal-body { overflow-y: auto; }
+@media (max-width: 640px) {
+  .form-grid, .team-checks { grid-template-columns: minmax(0, 1fr); }
+  .secret { flex-direction: column; align-items: stretch; text-align: center; }
+}
+
+.bulk-bar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--primary-soft); border-bottom: 1px solid var(--blue-line); font-size: 13px; }
+table.data tbody tr.selected { background: #f1f5fd; }

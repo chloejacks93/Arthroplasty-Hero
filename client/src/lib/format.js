@@ -62,7 +62,9 @@ export const fmtDate = (v) => {
   return Number.isNaN(d.getTime()) ? '—' : dateFmt.format(d);
 };
 export const fmtDateTime = (v) => (v ? dateTimeFmt.format(new Date(v)) : '—');
-export const fmtMoney = (v) => (v == null ? '—' : money.format(v));
+const moneyCents = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Whole dollars for large values; cents when they matter (consignment fees are often $0.65).
+export const fmtMoney = (v) => (v == null ? '—' : Math.abs(v) < 100 && v % 1 !== 0 ? moneyCents.format(v) : money.format(v));
 export const fmtNum = (v) => (v == null ? '—' : Number(v).toLocaleString('en-US'));
 
 export function relTime(v) {

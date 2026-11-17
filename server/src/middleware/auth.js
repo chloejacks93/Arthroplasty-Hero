@@ -38,7 +38,7 @@ export async function loadUser(req, _res, next) {
        FROM users u
       WHERE s.token_hash = $1 AND s.expires_at > now() AND u.id = s.user_id AND u.active
             AND u.role <> 'system'
-      RETURNING u.id, u.email, u.full_name, u.role, u.phone, u.title,
+      RETURNING u.id, u.email, u.full_name, u.role, u.phone, u.title, u.must_change_password,
                 ARRAY(SELECT team_id FROM user_teams WHERE user_id = u.id) AS team_ids`,
     [hashToken(token), config.sessionDays],
   );
@@ -51,6 +51,10 @@ export async function loadUser(req, _res, next) {
 
 export function requireAuth(req, _res, next) {
   if (!req.user) throw unauthorized();
+  // A temporary password must be replaced before anything else is allowed.
+  if (req.user.must_change_password) {
+    throw Object.assign(forbidden('Set a new password to continue.'), { details: { code: 'password_change_required' } });
+  }
   next();
 }
 

@@ -5,7 +5,9 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Inbox } fro
  * stacked rows on phones. Columns:
  *   { key, header, render(row), sortKey?, align?, mobile?: 'primary'|'status'|'full'|'hide', label? }
  */
-export function DataTable({ columns, rows, loading, sort, dir, onSort, onRowClick, empty, rowKey = 'id', compact, auto }) {
+export function DataTable({ columns, rows, loading, sort, dir, onSort, onRowClick, empty, rowKey = 'id', compact, auto, selected, onToggle, onToggleAll }) {
+  const selectable = !!selected;
+  const allOn = selectable && rows?.length > 0 && rows.every((r) => selected.has(r[rowKey]));
   const SortIcon = ({ active }) => (!active ? <ArrowUpDown /> : dir === 'asc' ? <ArrowUp /> : <ArrowDown />);
 
   return (
@@ -13,6 +15,7 @@ export function DataTable({ columns, rows, loading, sort, dir, onSort, onRowClic
       <table className={`data responsive${compact ? ' compact' : ''}`}>
         <thead>
           <tr>
+            {selectable && <th style={{ width: 36 }}><input type="checkbox" className="check" checked={allOn} onChange={() => onToggleAll(rows, !allOn)} aria-label="Select all on this page" /></th>}
             {columns.map((c) => {
               const sorted = c.sortKey && sort === c.sortKey;
               return (
@@ -36,13 +39,19 @@ export function DataTable({ columns, rows, loading, sort, dir, onSort, onRowClic
           {loading && !rows?.length
             ? Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i}>
+                  {selectable && <td />}
                   {columns.map((c) => (
                     <td key={c.key}><div className="skeleton" style={{ height: 10, width: `${40 + ((i * 13 + c.key.length * 7) % 50)}%` }} /></td>
                   ))}
                 </tr>
               ))
             : rows?.map((r) => (
-                <tr key={r[rowKey]} className={onRowClick ? 'clickable' : ''} onClick={onRowClick ? () => onRowClick(r) : undefined}>
+                <tr key={r[rowKey]} className={`${onRowClick ? 'clickable' : ''}${selectable && selected.has(r[rowKey]) ? ' selected' : ''}`} onClick={onRowClick ? () => onRowClick(r) : undefined}>
+                  {selectable && (
+                    <td data-hide-mobile="" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" className="check" checked={selected.has(r[rowKey])} onChange={() => onToggle(r[rowKey])} aria-label={`Select ${r.reference || ''}`} />
+                    </td>
+                  )}
                   {columns.map((c) => (
                     <td
                       key={c.key}

@@ -20,6 +20,9 @@ import qrRoutes from './routes/qr.js';
 import transferRoutes from './routes/transfers.js';
 import investigationRoutes from './routes/investigations.js';
 import notificationRoutes from './routes/notifications.js';
+import userRoutes from './routes/users.js';
+import teamRoutes from './routes/teams.js';
+import facilityRoutes from './routes/facilities.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -80,6 +83,9 @@ export function createApp() {
   api.use('/transfers', transferRoutes);
   api.use('/investigations', investigationRoutes);
   api.use('/notifications', notificationRoutes);
+  api.use('/users', userRoutes);
+  api.use('/teams', teamRoutes);
+  api.use('/facilities', facilityRoutes);
   api.use((_req, _res, next) => next(new HttpError(404, 'Unknown API endpoint.')));
   app.use('/api', api);
 

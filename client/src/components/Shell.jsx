@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LayoutDashboard, Boxes, Search, LogOut, Menu, FileSpreadsheet, GitCompareArrows, ScanLine, QrCode, PackageCheck, ArrowLeftRight, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, Boxes, Search, LogOut, Menu, FileSpreadsheet, GitCompareArrows, ScanLine, QrCode, PackageCheck, ArrowLeftRight, ShieldAlert, Building2, UsersRound, Contact } from 'lucide-react';
 import { useAuth } from '../lib/auth.jsx';
 import { initials, ROLE_LABEL } from '../lib/format.js';
 import { refreshMeta, useMeta } from '../lib/useApi.js';
@@ -27,6 +27,9 @@ function buildNav(meta) {
   if (meta?.permissions.linkQr) data.push({ to: '/qr-requests', label: 'QR Link Requests', icon: QrCode, count: meta.counts.pendingQrRequests });
   if (meta?.permissions.resolveConflicts) data.push({ to: '/conflicts', label: 'Conflicts', icon: GitCompareArrows, count: meta.counts.openConflicts });
   if (data.length) nav.push({ label: 'Data', items: data });
+  const dir = [{ to: '/facilities', label: 'Facilities', icon: Building2 }];
+  if (meta?.permissions.investigate) dir.push({ to: '/teams', label: 'Teams', icon: UsersRound }, { to: '/people', label: 'People', icon: Contact });
+  nav.push({ label: 'Directory', items: dir });
   return nav;
 }
 
@@ -65,10 +68,10 @@ export function Shell() {
         <div className="sidebar-foot">
           <div className="user-chip">
             <div className="avatar" aria-hidden>{initials(user.full_name)}</div>
-            <div className="who">
+            <Link to="/account" className="who" title="Your account">
               <strong title={user.full_name}>{user.full_name}</strong>
               <span>{ROLE_LABEL[user.role] || user.role}</span>
-            </div>
+            </Link>
             <button className="icon-btn" onClick={logout} title="Sign out" aria-label="Sign out">
               <LogOut />
             </button>

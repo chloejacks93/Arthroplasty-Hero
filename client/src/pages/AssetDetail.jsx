@@ -28,6 +28,7 @@ export default function AssetDetail() {
   const { data, error, loading, reload } = useApi(`/assets/${id}`);
   const meta = useMeta();
   const [tab, setTab] = useState('history');
+  const [assign, setAssign] = useState(false);
 
   if (error) {
     return (
@@ -197,9 +198,10 @@ export default function AssetDetail() {
 
         <div className="stack">
           <section className="panel">
-            <div className="panel-head"><h2>Custody &amp; location</h2></div>
+            <div className="panel-head"><h2>Custody &amp; location</h2>
+              {meta?.permissions.investigate && <button className="linkish" onClick={() => setAssign(true)}>Edit assignment</button>}</div>
             <div className="custody">
-              <Row icon={MapPin} k="Current location" v={a.facility_name || 'Unassigned'} sub={a.facility_type ? FACILITY_TYPE[a.facility_type] : null} />
+              <Row icon={MapPin} k="Current location" v={a.current_facility_id ? <Link to={`/facilities/${a.current_facility_id}`}>{a.facility_name}</Link> : 'Unassigned'} sub={a.facility_type ? FACILITY_TYPE[a.facility_type] : null} />
               <Row icon={User} k="Assigned representative" v={a.rep_name || 'Unassigned'} sub={a.rep_phone || a.rep_email} />
               <Row icon={User} k="Last known custodian" v={a.custodian_name || '—'} />
               <Row icon={Warehouse} k="Home warehouse" v={a.warehouse_name || '—'} />
@@ -209,6 +211,7 @@ export default function AssetDetail() {
           </section>
 
           <QrPanel a={a} canLink={!!meta?.permissions.linkQr} onChanged={reload} />
+          {assign && <AssignmentModal a={a} meta={meta} onClose={() => setAssign(false)} onSaved={() => { setAssign(false); reload(); }} />}
         </div>
       </div>
     </>
@@ -327,5 +330,43 @@ function QrPanel({ a, canLink, onChanged }) {
         </Modal>
       )}
     </section>
+  );
+}
+
+function AssignmentModal({ a, meta, onClose, onSaved }) {
+  const [form, setForm] = useState({ assigned_rep_id: a.assigned_rep_id || '', team_id: a.team_id || '', warehouse_id: a.warehouse_id || '', note: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const submit = async () => {
+    setBusy(true); setErr('');
+    try {
+      await api.patch(`/assets/${a.id}/assignment`, {
+        assigned_rep_id: form.assigned_rep_id || null, team_id: form.team_id || null, warehouse_id: form.warehouse_id || null, note: form.note || undefined,
+      });
+      onSaved();
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+  const reps = (meta?.users || []).filter((u) => u.role === 'rep');
+  const others = (meta?.users || []).filter((u) => u.role !== 'rep');
+  return (
+    <Modal title="Edit assignment" onClose={onClose}
+      actions={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={busy} onClick={submit}>Save</button></>}>
+      <div className="form-grid">
+        <div className="field span2"><label htmlFor="ar">Assigned representative</label>
+          <select id="ar" className="select" value={form.assigned_rep_id} onChange={set('assigned_rep_id')}>
+            <option value="">Unassigned</option>
+            <optgroup label="Representatives">{reps.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}</optgroup>
+            {others.length > 0 && <optgroup label="Inventory & management">{others.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}</optgroup>}
+          </select></div>
+        <div className="field"><label htmlFor="at">Team</label>
+          <select id="at" className="select" value={form.team_id} onChange={set('team_id')}><option value="">No team</option>{meta?.teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
+        <div className="field"><label htmlFor="aw">Home warehouse</label>
+          <select id="aw" className="select" value={form.warehouse_id} onChange={set('warehouse_id')}><option value="">None</option>{meta?.facilities.filter((f) => f.facility_type === 'warehouse').map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></div>
+        <div className="field span2"><label htmlFor="an">Note <span className="subtle">(recorded in history)</span></label><input id="an" className="input" value={form.note} onChange={set('note')} placeholder="e.g. Territory realignment" /></div>
+        <p className="subtle span2" style={{ margin: 0, fontSize: 12 }}>To change where it physically is, use Transfer, or resolve an investigation.</p>
+        {err && <div className="form-error span2">{err}</div>}
+      </div>
+    </Modal>
   );
 }

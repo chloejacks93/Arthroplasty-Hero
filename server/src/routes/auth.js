@@ -63,7 +63,8 @@ router.post('/logout', async (req, res) => {
   res.json({ ok: true });
 });
 
-router.get('/me', requireAuth, (req, res) => {
+router.get('/me', (req, res) => {
+  if (!req.user) throw unauthorized();
   res.json({ user: req.user });
 });
 
@@ -72,12 +73,14 @@ const pwSchema = z.object({
   newPassword: z.string().min(10, 'must be at least 10 characters').max(200),
 });
 
-router.post('/change-password', requireAuth, async (req, res) => {
+router.post('/change-password', async (req, res) => {
+  if (!req.user) throw unauthorized();
   const { currentPassword, newPassword } = parse(pwSchema, req.body);
   const { rows } = await query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
   if (!(await bcrypt.compare(currentPassword, rows[0].password_hash))) throw badRequest('Current password is incorrect.');
   const hash = await bcrypt.hash(newPassword, 12);
-  await query('UPDATE users SET password_hash = $2 WHERE id = $1', [req.user.id, hash]);
+  if (await bcrypt.compare(newPassword, rows[0].password_hash)) throw badRequest('Choose a password different from the current one.');
+  await query('UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1', [req.user.id, hash]);
   // Sign out every other device.
   await query('DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2', [req.user.id, req.sessionTokenHash]);
   res.json({ ok: true });

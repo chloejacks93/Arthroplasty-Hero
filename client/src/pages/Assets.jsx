@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, QrCode, Download } from 'lucide-react';
+import { Search, QrCode, Download, UserCheck, CheckCircle2 } from 'lucide-react';
+import { api } from '../lib/api.js';
+import { Modal } from '../components/Modal.jsx';
 import { useApi } from '../lib/useApi.js';
 import { qs } from '../lib/api.js';
 import { useAuth, isOrgWide } from '../lib/auth.jsx';
@@ -39,7 +41,12 @@ export default function Assets() {
     setParams(next, { replace: true });
   }
 
-  const { data, loading, error } = useApi(`/assets${qs({ ...state, pageSize: 50 })}`);
+  const { data, loading, error, reload } = useApi(`/assets${qs({ ...state, pageSize: 50 })}`);
+  const [selected, setSelected] = useState(new Set());
+  const [bulk, setBulk] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState('');
+  const toggle = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleAll = (rows, on) => setSelected((s) => { const n = new Set(s); rows.forEach((r) => (on ? n.add(r.id) : n.delete(r.id))); return n; });
   const onSort = (key) => update({ sort: key, dir: state.sort === key && state.dir === 'asc' ? 'desc' : 'asc' });
   const hasFilters = FILTER_KEYS.some((k) => state[k]);
   const reps = meta?.users.filter((u) => u.role === 'rep') || [];
@@ -121,6 +128,14 @@ export default function Assets() {
           {state.mine && <span className="tag">My assets</span>}
         </div>
 
+        {selected.size > 0 && (
+          <div className="bulk-bar">
+            <span><strong>{selected.size}</strong> selected</span>
+            <button className="btn btn-sm btn-primary" onClick={() => setBulk(true)}><UserCheck aria-hidden /> Assign rep / team</button>
+            <button className="chip-clear" onClick={() => setSelected(new Set())}>Clear selection</button>
+          </div>
+        )}
+        {bulkMsg && <div className="notice green" style={{ margin: 14 }}><CheckCircle2 aria-hidden />{bulkMsg}</div>}
         {error && <div className="notice red" style={{ margin: 14 }}>{error.message}</div>}
 
         <DataTable
@@ -131,12 +146,53 @@ export default function Assets() {
           dir={state.dir}
           onSort={onSort}
           onRowClick={(r) => navigate(`/assets/${r.id}`)}
+          {...(isOrgWide(user) ? { selected, onToggle: toggle, onToggleAll: toggleAll } : {})}
           empty={hasFilters
             ? { title: 'No matching assets', body: 'Try a different search or clear the filters.' }
             : { title: 'No assets registered yet', body: 'Assets will appear here once spreadsheets are imported.' }}
         />
         {data && <Pager page={data.page} pageSize={data.pageSize} total={data.total} onPage={(p) => update({ page: String(p) }, false)} />}
       </section>
+      {bulk && (
+        <BulkAssignModal ids={[...selected]} meta={meta} onClose={() => setBulk(false)}
+          onDone={(r) => { setBulk(false); setSelected(new Set()); setBulkMsg(`${r.changed} asset${r.changed === 1 ? '' : 's'} updated${r.unchanged ? `, ${r.unchanged} already matched` : ''}. Each change is in the asset’s history.`); reload(); }} />
+      )}
     </>
+  );
+}
+
+function BulkAssignModal({ ids, meta, onClose, onDone }) {
+  const [rep, setRep] = useState('keep');
+  const [team, setTeam] = useState('keep');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const submit = async () => {
+    setBusy(true); setErr('');
+    const body = { asset_ids: ids, note: note || undefined };
+    if (rep !== 'keep') body.assigned_rep_id = rep || null;
+    if (team !== 'keep') body.team_id = team || null;
+    try { onDone(await api.post('/assets/bulk-assignment', body)); } catch (e) { setErr(e.message); setBusy(false); }
+  };
+  const reps = (meta?.users || []).filter((u) => u.role === 'rep');
+  return (
+    <Modal title={`Assign ${ids.length} asset${ids.length === 1 ? '' : 's'}`} onClose={onClose}
+      actions={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={busy || (rep === 'keep' && team === 'keep')} onClick={submit}>{busy ? 'Saving…' : 'Apply'}</button></>}>
+      <div className="form-grid">
+        <div className="field span2"><label htmlFor="br">Assigned representative</label>
+          <select id="br" className="select" value={rep} onChange={(e) => setRep(e.target.value)}>
+            <option value="keep">Keep as is</option><option value="">Unassigned</option>
+            {reps.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+          </select></div>
+        <div className="field span2"><label htmlFor="bt">Team</label>
+          <select id="bt" className="select" value={team} onChange={(e) => setTeam(e.target.value)}>
+            <option value="keep">Keep as is</option><option value="">No team</option>
+            {meta?.teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select></div>
+        <div className="field span2"><label htmlFor="bn">Note <span className="subtle">(recorded on each asset)</span></label><input id="bn" className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Initial rep assignment" /></div>
+        <p className="subtle span2" style={{ margin: 0, fontSize: 12 }}>Locations don’t change. Use Transfer to move trays.</p>
+        {err && <div className="form-error span2">{err}</div>}
+      </div>
+    </Modal>
   );
 }

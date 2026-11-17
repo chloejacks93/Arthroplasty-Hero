@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { query } from '../db.js';
-import { parse, notFound } from '../lib/errors.js';
+import { parse, notFound, forbidden, badRequest } from '../lib/errors.js';
+import { tx } from '../db.js';
+import { can } from '../lib/roles.js';
+import { audit } from '../lib/audit.js';
+import { event } from '../lib/importCommit.js';
 import { assetScope, assetCode } from '../lib/roles.js';
 
 const router = Router();
@@ -163,6 +167,72 @@ router.get('/:id', async (req, res) => {
     asset, events: events.rows, transfers: transfers.rows, sources: sources.rows, conflicts: conflicts.rows,
     investigations: investigations.rows, openTransfer,
   });
+});
+
+// ---------------------------------------------------------------------
+// Responsibility (not location): assigned rep, team, home warehouse.
+// Location only changes through a transfer or an investigation.
+// ---------------------------------------------------------------------
+const assignmentSchema = z.object({
+  assigned_rep_id: z.uuid().nullable().optional(),
+  team_id: z.uuid().nullable().optional(),
+  warehouse_id: z.uuid().nullable().optional(),
+  note: z.string().trim().max(300).optional(),
+});
+const NAME_COL = { assigned_rep_id: 'rep_name', team_id: 'team_name', warehouse_id: 'warehouse_name' };
+
+async function applyAssignment(c, user, id, b) {
+  const { rows: [a] } = await c.query(
+    `SELECT a.*, r.full_name AS rep_name, t.name AS team_name, w.name AS warehouse_name FROM assets a
+       LEFT JOIN users r ON r.id = a.assigned_rep_id LEFT JOIN teams t ON t.id = a.team_id LEFT JOIN facilities w ON w.id = a.warehouse_id
+      WHERE a.id = $1 AND a.retired_at IS NULL FOR UPDATE OF a`, [id]);
+  if (!a) throw notFound('Asset not found.');
+  const changes = {};
+  const sets = [];
+  const vals = [id];
+  const check = async (field, sql, label, nameCol) => {
+    if (b[field] === undefined || b[field] === a[field]) return;
+    let name = null;
+    if (b[field]) {
+      const { rows: [x] } = await c.query(sql, [b[field]]);
+      if (!x) throw badRequest(`Choose an active ${label}.`);
+      name = x[nameCol];
+    }
+    vals.push(b[field]);
+    sets.push(`${field} = $${vals.length}`);
+    changes[field] = { from: a[NAME_COL[field]], to: name };
+  };
+  await check('assigned_rep_id', `SELECT full_name FROM users WHERE id = $1 AND active AND role <> 'system'`, 'user', 'full_name');
+  await check('team_id', 'SELECT name FROM teams WHERE id = $1 AND active', 'team', 'name');
+  await check('warehouse_id', `SELECT name FROM facilities WHERE id = $1 AND active AND facility_type = 'warehouse'`, 'warehouse', 'name');
+  if (!sets.length) return false;
+  await c.query(`UPDATE assets SET ${sets.join(', ')}, version = version + 1 WHERE id = $1`, vals);
+  await event(c, id, changes.assigned_rep_id ? 'reassigned' : 'updated', user.id, { details: { ...changes, note: b.note || null } });
+  await audit(c, user.id, 'asset', id, 'assignment_changed', { ...changes, note: b.note || null });
+  return true;
+}
+
+router.patch('/:id/assignment', async (req, res) => {
+  if (!can.viewAll(req.user)) throw forbidden('Only inventory, management and administrators can change assignments.');
+  const id = parse(z.uuid(), req.params.id);
+  const b = parse(assignmentSchema, req.body);
+  await tx((c) => applyAssignment(c, req.user, id, b));
+  res.json({ ok: true });
+});
+
+// Bulk: same rules, one transaction, one history entry per asset that changed.
+const bulkSchema = assignmentSchema.extend({ asset_ids: z.array(z.uuid()).min(1).max(500) });
+
+router.post('/bulk-assignment', async (req, res) => {
+  if (!can.viewAll(req.user)) throw forbidden('Only inventory, management and administrators can change assignments.');
+  const { asset_ids: ids, ...b } = parse(bulkSchema, req.body);
+  if (b.assigned_rep_id === undefined && b.team_id === undefined && b.warehouse_id === undefined) throw badRequest('Choose what to assign.');
+  const changed = await tx(async (c) => {
+    let n = 0;
+    for (const id of [...new Set(ids)]) if (await applyAssignment(c, req.user, id, b)) n++;
+    return n;
+  });
+  res.json({ ok: true, changed, unchanged: ids.length - changed });
 });
 
 export default router;
