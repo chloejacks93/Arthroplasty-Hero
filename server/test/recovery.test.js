@@ -44,8 +44,28 @@ test('recovery password unlocks a locked-out administrator once, never logs it, 
   // Restarting with the setting still present does not reset it again.
   lines.length = 0;
   assert.equal(await applyAdminRecovery({ email: 'owner@test.local', password: 'recover-me-123', log }), null);
-  assert.match(lines[0], /already applied/);
+  assert.match(lines[0], /already used to sign in/);
   assert.equal((await login('owner@test.local', 'owners-new-password')).status, 200);
   const a = await pool.query(`SELECT count(*)::int AS n FROM admin_audit WHERE changes->>'source' = 'ADMIN_RECOVERY_PASSWORD'`);
   assert.equal(a.rows[0].n, 1);
+});
+
+test('recovery value with pasted whitespace works, re-applies until used, and wins over INITIAL_ADMIN_PASSWORD', async () => {
+  await resetDb();
+  await makeUser('admin', 'boss@test.local');
+  await pool.query(`UPDATE users SET last_login_at = NULL WHERE email = 'boss@test.local'`);
+  const { ensureInitialAdmin } = await import('../src/bootstrap.js');
+  const log = () => {};
+  process.env.ADMIN_RECOVERY_PASSWORD = '  pasted-value-123\n';
+  try {
+    // Simulate two restarts before the owner signs in, with INITIAL_ADMIN_PASSWORD also still set.
+    for (let i = 0; i < 2; i++) {
+      await ensureInitialAdmin({ email: 'boss@test.local', password: 'initial-value-123', log });
+      await applyAdminRecovery({ email: 'boss@test.local', log });
+    }
+    assert.equal((await login('boss@test.local', 'initial-value-123')).status, 401, 'initial setting no longer overrides');
+    assert.equal((await login('boss@test.local', 'pasted-value-123')).status, 200, 'trimmed recovery value works');
+  } finally {
+    delete process.env.ADMIN_RECOVERY_PASSWORD;
+  }
 });

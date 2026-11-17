@@ -18,9 +18,11 @@ export async function applyAdminRecovery({
   password = process.env.ADMIN_RECOVERY_PASSWORD,
   log = console.log,
 } = {}) {
+  // Values pasted into a dashboard often carry stray spaces or a newline.
+  password = password ? String(password).trim() : '';
   if (!password) return null;
   const addr = (email || '').trim().toLowerCase();
-  if (String(password).length < 10) {
+  if (password.length < 10) {
     log('[recovery] ADMIN_RECOVERY_PASSWORD is shorter than 10 characters; ignored.');
     return null;
   }
@@ -31,12 +33,14 @@ export async function applyAdminRecovery({
   const fingerprint = crypto.createHash('sha256').update(`${addr}\n${password}`).digest('hex');
   return tx(async (c) => {
     await c.query('SELECT pg_advisory_xact_lock(74210004)');
-    const { rows: [done] } = await c.query(`SELECT value FROM app_settings WHERE key = 'admin_recovery_applied'`);
-    if (done?.value === fingerprint) {
-      log('[recovery] This recovery password was already applied. Remove ADMIN_RECOVERY_PASSWORD from the dashboard.');
+    const { rows: [done] } = await c.query(`SELECT value, updated_at FROM app_settings WHERE key = 'admin_recovery_applied'`);
+    const { rows: [u] } = await c.query(`SELECT id, role, last_login_at FROM users WHERE lower(email) = $1 AND role <> 'system'`, [addr]);
+    // Re-apply on every start until the owner has actually signed in with it;
+    // after that, the same value never resets the account again.
+    if (done?.value === fingerprint && u?.last_login_at && u.last_login_at > done.updated_at) {
+      log('[recovery] This recovery password was already used to sign in. Remove ADMIN_RECOVERY_PASSWORD from the dashboard.');
       return null;
     }
-    const { rows: [u] } = await c.query(`SELECT id, role FROM users WHERE lower(email) = $1 AND role <> 'system'`, [addr]);
     if (!u) {
       log(`[recovery] No user with email ${addr}; nothing changed.`);
       return null;

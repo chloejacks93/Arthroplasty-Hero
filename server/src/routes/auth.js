@@ -35,11 +35,17 @@ router.post('/login', loginLimiter, async (req, res) => {
   const user = rows[0];
   const usable = user && user.active && user.role !== 'system' && user.password_hash;
 
+  // Why a sign-in failed, for the owner's private server log (never the password).
+  const why = (reason) => console.log(`[auth] sign-in failed for ${email}: ${reason}`);
+  if (!user) why('no account with this email');
+  else if (!user.active) why('account is deactivated');
   if (usable && user.locked_until && new Date(user.locked_until) > new Date()) {
+    why('account is locked');
     throw unauthorized('This account is temporarily locked after repeated failed sign-ins. Try again in 15 minutes.');
   }
   const ok = await bcrypt.compare(password, usable ? user.password_hash : DUMMY_HASH);
   if (!usable || !ok) {
+    if (usable) why('wrong password');
     if (usable) {
       await query(
         // After a lock expires the count starts over, so one more typo doesn't re-lock immediately.
@@ -57,6 +63,7 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 
   await query(`UPDATE users SET failed_logins = 0, locked_until = NULL, last_login_at = now() WHERE id = $1`, [user.id]);
+  console.log(`[auth] signed in: ${email}`);
   const token = await createSession(user.id, req);
   res.cookie(SESSION_COOKIE, token, cookieOptions());
   res.json({ ok: true });

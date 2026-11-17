@@ -35,7 +35,8 @@ export async function ensureInitialAdmin({
     log('[bootstrap] INITIAL_ADMIN_EMAIL is not a valid email address; first-administrator setup skipped.');
     return null;
   }
-  let chosen = password ? String(password) : '';
+  // Values pasted into a dashboard often carry stray spaces or a newline.
+  let chosen = password ? String(password).trim() : '';
   if (chosen && chosen.length < 10) {
     log('[bootstrap] INITIAL_ADMIN_PASSWORD is shorter than 10 characters and was ignored.');
     chosen = '';
@@ -71,6 +72,11 @@ export async function ensureInitialAdmin({
       return { id: u.id, email: addr, password: chosen ? null : pw, action: 'created' };
     }
 
+    // A recovery password takes precedence; don't overwrite it on every restart.
+    if (chosen && process.env.ADMIN_RECOVERY_PASSWORD) {
+      log('[bootstrap] ADMIN_RECOVERY_PASSWORD is set, so INITIAL_ADMIN_PASSWORD is ignored. Remove INITIAL_ADMIN_PASSWORD.');
+      return null;
+    }
     // Case 2: the configured admin exists but has never signed in; owner supplied a password.
     if (chosen && existing && existing.role === 'admin' && existing.active && !existing.last_login_at) {
       const hash = await bcrypt.hash(chosen, 12);
