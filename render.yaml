@@ -42,6 +42,10 @@ services:
         sync: false
       - key: INITIAL_ADMIN_NAME
         sync: false
+      # Optional: a first sign-in password you choose (10+ chars). Applies only to an
+      # administrator who has never signed in. Remove it after your first sign-in.
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false
 
 databases:
   - name: arthroplasty-asset-control-db

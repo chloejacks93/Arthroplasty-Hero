@@ -82,6 +82,7 @@ TEST_DATABASE_URL=postgres://USER:PASS@localhost:5432/asset_control_test npm tes
    - `INITIAL_ADMIN_NAME`: your name
 4. Click **Apply**. The first build takes a few minutes. Each start runs database migrations first (transactional, locked, refuse edited migrations). If a migration fails, the new version doesn't start and the previous one keeps serving.
 5. Open the web service → **Logs**, find the box that says **Initial administrator**, and copy the **temporary password**. It's printed once, only in your private Render logs.
+   **Can't find it?** In the web service → **Environment**, add `INITIAL_ADMIN_PASSWORD` = a password you choose (10+ characters) → **Save, rebuild, and deploy**. As long as the administrator has never signed in, that becomes the sign-in password (you'll set a new one right after). Remove the setting once you're in; after the first sign-in it's ignored anyway.
 6. Open the service URL (`https://arthroplasty-asset-control.onrender.com` or similar), sign in with your email and that temporary password, and set your own password.
 7. **Imports → New import:** upload your spreadsheets. Then **People → Add person** for each rep, and assign trays from the Asset Registry (select → *Assign rep / team*).
 
