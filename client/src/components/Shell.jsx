@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LayoutDashboard, Boxes, Search, LogOut, Menu, FileSpreadsheet, GitCompareArrows } from 'lucide-react';
+import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { LayoutDashboard, Boxes, Search, LogOut, Menu, FileSpreadsheet, GitCompareArrows, ScanLine, QrCode } from 'lucide-react';
 import { useAuth } from '../lib/auth.jsx';
 import { initials, ROLE_LABEL } from '../lib/format.js';
 import { refreshMeta, useMeta } from '../lib/useApi.js';
@@ -13,12 +13,14 @@ function buildNav(meta) {
       label: 'Operations',
       items: [
         { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+        { to: '/scan', label: 'Scan Asset', icon: ScanLine },
         { to: '/assets', label: 'Asset Registry', icon: Boxes },
       ],
     },
   ];
   const data = [];
   if (meta?.permissions.importData) data.push({ to: '/imports', label: 'Imports', icon: FileSpreadsheet });
+  if (meta?.permissions.linkQr) data.push({ to: '/qr-requests', label: 'QR Link Requests', icon: QrCode, count: meta.counts.pendingQrRequests });
   if (meta?.permissions.resolveConflicts) data.push({ to: '/conflicts', label: 'Conflicts', icon: GitCompareArrows, count: meta.counts.openConflicts });
   if (data.length) nav.push({ label: 'Data', items: data });
   return nav;
@@ -77,6 +79,9 @@ export function Shell() {
           </button>
           <GlobalSearch />
           <div className="topbar-right">
+            {location.pathname !== '/scan' && (
+              <Link to="/scan" className="btn btn-primary scan-btn" aria-label="Scan asset"><ScanLine aria-hidden /><span>Scan</span></Link>
+            )}
             <span className="env-tag">{new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date())}</span>
           </div>
         </header>

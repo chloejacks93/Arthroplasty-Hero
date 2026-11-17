@@ -7,20 +7,23 @@ import { can } from '../lib/roles.js';
 const router = Router();
 
 router.get('/', async (req, res) => {
-  const [teams, facilities, reps, conflicts] = await Promise.all([
+  const [teams, facilities, reps, conflicts, qrRequests] = await Promise.all([
     query(`SELECT id, name, code FROM teams WHERE active ORDER BY name`),
     query(`SELECT id, name, facility_type, city, state FROM facilities WHERE active ORDER BY name`),
     query(`SELECT id, full_name, role FROM users WHERE active AND role <> 'system' ORDER BY full_name`),
     can.resolveConflicts(req.user)
       ? query(`SELECT count(*)::int AS n FROM asset_conflicts WHERE status = 'open'`)
       : Promise.resolve({ rows: [{ n: 0 }] }),
+    can.linkQr(req.user)
+      ? query(`SELECT count(*)::int AS n FROM qr_link_requests WHERE status = 'pending'`)
+      : Promise.resolve({ rows: [{ n: 0 }] }),
   ]);
   res.json({
     teams: teams.rows,
     facilities: facilities.rows,
     users: reps.rows,
-    counts: { openConflicts: conflicts.rows[0].n },
-    permissions: { importData: can.importData(req.user), resolveConflicts: can.resolveConflicts(req.user) },
+    counts: { openConflicts: conflicts.rows[0].n, pendingQrRequests: qrRequests.rows[0].n },
+    permissions: { importData: can.importData(req.user), resolveConflicts: can.resolveConflicts(req.user), linkQr: can.linkQr(req.user) },
   });
 });
 

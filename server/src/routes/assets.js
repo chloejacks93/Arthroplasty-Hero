@@ -36,6 +36,7 @@ const listSchema = z.object({
   rep_id: z.uuid().optional(),
   mine: z.enum(['1']).optional(),
   attention: z.enum(['1']).optional(),
+  qr: z.enum(['linked', 'none']).optional(),
   sort: z.enum(Object.keys(SORTS)).default('reference'),
   dir: z.enum(['asc', 'desc']).default('asc'),
   page: z.coerce.number().int().min(1).default(1),
@@ -71,6 +72,7 @@ export function buildAssetFilter(user, f) {
   if (f.rep_id) add('a.assigned_rep_id = ?', f.rep_id);
   if (f.mine) add('(a.assigned_rep_id = ? OR a.custodian_id = ?)', user.id);
   if (f.attention) add('a.status = ANY(?)', ATTENTION_STATUSES);
+  if (f.qr) where.push(`${f.qr === 'none' ? 'NOT ' : ''}EXISTS (SELECT 1 FROM asset_qr_codes qq WHERE qq.asset_id = a.id AND qq.active)`);
   return { where: where.join(' AND '), params };
 }
 

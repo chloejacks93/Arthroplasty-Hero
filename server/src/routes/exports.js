@@ -40,6 +40,7 @@ const exportSchema = z.object({
   rep_id: z.uuid().optional(),
   mine: z.enum(['1']).optional(),
   attention: z.enum(['1']).optional(),
+  qr: z.enum(['linked', 'none']).optional(),
 });
 
 router.get('/assets.xlsx', async (req, res) => {

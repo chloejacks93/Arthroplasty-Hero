@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, ArrowLeftRight, CheckCircle2, FileSpreadsheet, QrCode, PackagePlus, AlertTriangle, Pencil, ScanLine, Stethoscope, ClipboardCheck, Circle } from 'lucide-react';
+import { Search as SearchIcon, Boxes as BoxesIcon, ArrowRight, ArrowLeftRight, CheckCircle2, FileSpreadsheet, QrCode, PackagePlus, AlertTriangle, Pencil, ScanLine, Stethoscope, ClipboardCheck, Circle } from 'lucide-react';
 import { useApi } from '../lib/useApi.js';
 import { useAuth, isOrgWide } from '../lib/auth.jsx';
 import { StatusBadge } from '../components/StatusBadge.jsx';
@@ -32,10 +32,21 @@ export default function Dashboard() {
           <h1>{orgWide ? 'Operations overview' : `Good ${greeting()}, ${firstName}`}</h1>
           <p>{orgWide ? 'Live position of every registered arthroplasty asset across all teams and facilities.' : 'Assets in your teams and custody.'}</p>
         </div>
-        <div className="head-actions">
-          <Link to="/assets" className="btn">View all assets</Link>
-        </div>
+        {orgWide && (
+          <div className="head-actions">
+            <Link to="/assets" className="btn">View all assets</Link>
+          </div>
+        )}
       </div>
+
+      {!orgWide && (
+        <nav className="action-tiles" aria-label="Quick actions">
+          <Link to="/scan" className="tile tile-primary"><ScanLine aria-hidden /><strong>Scan asset</strong><span>Scan an existing QR label</span></Link>
+          <Link to="/assets" className="tile" onClick={() => setTimeout(() => document.querySelector('.toolbar .search input')?.focus(), 150)}>
+            <SearchIcon aria-hidden /><strong>Find a tray</strong><span>Search by name, lot or facility</span></Link>
+          <Link to="/assets?mine=1" className="tile"><BoxesIcon aria-hidden /><strong>My assets</strong><span>Assigned to you or in your custody</span></Link>
+        </nav>
+      )}
 
       <section className="kpi-strip" aria-label="Key figures">
         <Link to="/assets" className="kpi">

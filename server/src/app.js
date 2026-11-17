@@ -16,6 +16,7 @@ import metaRoutes from './routes/meta.js';
 import importRoutes from './routes/imports.js';
 import conflictRoutes from './routes/conflicts.js';
 import exportRoutes from './routes/exports.js';
+import qrRoutes from './routes/qr.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -72,6 +73,7 @@ export function createApp() {
   api.use('/imports', importRoutes);
   api.use('/conflicts', conflictRoutes);
   api.use('/exports', exportRoutes);
+  api.use('/qr', qrRoutes);
   api.use((_req, _res, next) => next(new HttpError(404, 'Unknown API endpoint.')));
   app.use('/api', api);
 

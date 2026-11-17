@@ -9,6 +9,8 @@ import Imports from './pages/Imports.jsx';
 import ImportNew from './pages/ImportNew.jsx';
 import ImportBatch from './pages/ImportBatch.jsx';
 import Conflicts from './pages/Conflicts.jsx';
+import Scan from './pages/Scan.jsx';
+import QrRequests from './pages/QrRequests.jsx';
 
 export default function App() {
   const { user } = useAuth();
@@ -24,6 +26,8 @@ export default function App() {
         <Route path="imports/new" element={<ImportNew />} />
         <Route path="imports/:id" element={<ImportBatch />} />
         <Route path="conflicts" element={<Conflicts />} />
+        <Route path="scan" element={<Scan />} />
+        <Route path="qr-requests" element={<QrRequests />} />
         <Route path="*" element={<div className="empty"><strong>Page not found</strong><Link to="/">Return to dashboard</Link></div>} />
       </Route>
     </Routes>

@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ChevronRight, MapPin, User, Warehouse, Users, QrCode, AlertTriangle, History, ArrowLeftRight,
-  FileSpreadsheet, PackagePlus, CheckCircle2, Circle, Clock,
+  FileSpreadsheet, PackagePlus, CheckCircle2, Circle, Clock, ScanLine, Unlink, Keyboard,
 } from 'lucide-react';
-import { useApi } from '../lib/useApi.js';
+import { useApi, useMeta } from '../lib/useApi.js';
+import { api } from '../lib/api.js';
+import { Modal } from '../components/Modal.jsx';
 import { StatusBadge } from '../components/StatusBadge.jsx';
 import { ASSET_TYPE, EVENT_LABEL, FACILITY_TYPE, fmtDate, fmtDateTime, fmtMoney, fmtNum, relTime } from '../lib/format.js';
 
-const EVENT_ICON = { created: PackagePlus, imported: FileSpreadsheet, qr_linked: QrCode,
+const EVENT_ICON = { created: PackagePlus, imported: FileSpreadsheet, qr_linked: QrCode, qr_unlinked: Unlink, scanned: ScanLine,
   transfer_initiated: ArrowLeftRight, transfer_received: CheckCircle2, problem_reported: AlertTriangle };
 
 const SOURCE_FIELD_LABEL = {
@@ -23,7 +25,8 @@ const SOURCE_FIELD_LABEL = {
 
 export default function AssetDetail() {
   const { id } = useParams();
-  const { data, error, loading } = useApi(`/assets/${id}`);
+  const { data, error, loading, reload } = useApi(`/assets/${id}`);
+  const meta = useMeta();
   const [tab, setTab] = useState('history');
 
   if (error) {
@@ -183,19 +186,7 @@ export default function AssetDetail() {
             </div>
           </section>
 
-          <section className="panel">
-            <div className="panel-head"><h2>Arthrex QR identifier</h2></div>
-            <div className="qr-box">
-              {a.qr_value ? (
-                <>
-                  <div className="qr-value">{a.qr_value}</div>
-                  <span className="subtle" style={{ fontSize: 12 }}>Linked {fmtDate(a.qr_linked_at)}</span>
-                </>
-              ) : (
-                <div className="notice amber"><QrCode aria-hidden /><span>No existing QR code is linked to this asset yet. An inventory lead or manager can link it by scanning the label.</span></div>
-              )}
-            </div>
-          </section>
+          <QrPanel a={a} canLink={!!meta?.permissions.linkQr} onChanged={reload} />
         </div>
       </div>
     </>
@@ -236,5 +227,83 @@ function Tab({ id, cur, set, icon: Icon, n, children }) {
     <button role="tab" aria-selected={cur === id} className={`tab${cur === id ? ' active' : ''}`} onClick={() => set(id)}>
       <Icon size={14} aria-hidden /> {children} <span className="n">{n}</span>
     </button>
+  );
+}
+
+function QrPanel({ a, canLink, onChanged }) {
+  const [mode, setMode] = useState(null); // 'type' | 'unlink' | 'replace'
+  const [value, setValue] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const close = () => { setMode(null); setValue(''); setReason(''); setErr(''); };
+  const submit = async () => {
+    setBusy(true); setErr('');
+    try {
+      if (mode === 'unlink') await api.post('/qr/unlink', { asset_id: a.id, reason });
+      else await api.post('/qr/link', { asset_id: a.id, value, replace: mode === 'replace', reason: mode === 'replace' ? reason : undefined });
+      close();
+      onChanged();
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+  return (
+    <section className="panel">
+      <div className="panel-head"><h2>Arthrex QR identifier</h2></div>
+      <div className="qr-box">
+        {a.qr_value ? (
+          <>
+            <div className="qr-value">{a.qr_value}</div>
+            <span className="subtle" style={{ fontSize: 12 }}>Linked {fmtDate(a.qr_linked_at)}</span>
+          </>
+        ) : (
+          <div className="notice amber"><QrCode aria-hidden /><span>No existing QR code is linked to this asset yet.{canLink ? ' Scan its label to link it.' : ' An inventory lead or manager can link it.'}</span></div>
+        )}
+        {canLink && (
+          <div className="seg" style={{ marginTop: 6 }}>
+            {!a.qr_value ? (
+              <>
+                <Link className="btn btn-primary btn-sm" to={`/scan?link=${a.id}`}><ScanLine aria-hidden /> Scan to link</Link>
+                <button className="btn btn-sm" onClick={() => setMode('type')}><Keyboard aria-hidden /> Enter code</button>
+              </>
+            ) : (
+              <>
+                <button className="btn btn-sm" onClick={() => setMode('replace')}>Replace</button>
+                <button className="btn btn-sm btn-ghost" onClick={() => setMode('unlink')}><Unlink aria-hidden /> Unlink</button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+      {mode && (
+        <Modal
+          title={mode === 'unlink' ? 'Unlink QR code?' : mode === 'replace' ? 'Replace QR code' : 'Link QR code'}
+          onClose={close}
+          actions={<>
+            <button className="btn" onClick={close} disabled={busy}>Cancel</button>
+            <button className={`btn ${mode === 'unlink' ? 'btn-danger' : 'btn-primary'}`} onClick={submit}
+              disabled={busy || (mode !== 'unlink' && !value.trim()) || (mode !== 'type' && reason.trim().length < 3)}>
+              {mode === 'unlink' ? 'Unlink' : 'Link code'}
+            </button>
+          </>}
+        >
+          <div style={{ display: 'grid', gap: 12 }}>
+            {mode === 'unlink' && <p style={{ margin: 0 }}>The label will stop opening this asset. The link stays in the asset's permanent history.</p>}
+            {mode !== 'unlink' && (
+              <div className="field">
+                <label htmlFor="qrv">Code on the label</label>
+                <input id="qrv" className="input mono" value={value} onChange={(e) => setValue(e.target.value)} autoComplete="off" spellCheck={false} placeholder="e.g. 3f2b…-…" autoFocus />
+              </div>
+            )}
+            {mode !== 'type' && (
+              <div className="field">
+                <label htmlFor="qrr">Reason</label>
+                <input id="qrr" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Label damaged and replaced" />
+              </div>
+            )}
+            {err && <div className="form-error">{err}</div>}
+          </div>
+        </Modal>
+      )}
+    </section>
   );
 }

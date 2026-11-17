@@ -8,7 +8,7 @@ import { DataTable, Pager } from '../components/DataTable.jsx';
 import { StatusBadge } from '../components/StatusBadge.jsx';
 import { STATUS, ASSET_TYPE, relTime } from '../lib/format.js';
 
-const FILTER_KEYS = ['q', 'status', 'asset_type', 'team_id', 'facility_id', 'rep_id', 'attention', 'mine'];
+const FILTER_KEYS = ['q', 'status', 'asset_type', 'team_id', 'facility_id', 'rep_id', 'attention', 'mine', 'qr'];
 
 export default function Assets() {
   const { user } = useAuth();
@@ -74,7 +74,7 @@ export default function Assets() {
           <p>{isOrgWide(user) ? 'Every registered tray, tote and set across the organization.' : 'Assets in your teams and custody.'}</p>
         </div>
         <div className="head-actions">
-          <a className="btn" href={`/api/exports/assets.xlsx${qs({ q: state.q, status: state.status, asset_type: state.asset_type, team_id: state.team_id, facility_id: state.facility_id, rep_id: state.rep_id, attention: state.attention, mine: state.mine })}`} download>
+          <a className="btn" href={`/api/exports/assets.xlsx${qs({ q: state.q, status: state.status, asset_type: state.asset_type, team_id: state.team_id, facility_id: state.facility_id, rep_id: state.rep_id, attention: state.attention, mine: state.mine, qr: state.qr })}`} download>
             <Download aria-hidden /> Export to Excel
           </a>
         </div>
@@ -111,8 +111,14 @@ export default function Assets() {
               </select>
             </>
           )}
+          <select className="select select-sm" value={state.qr} onChange={(e) => update({ qr: e.target.value })} aria-label="QR code">
+            <option value="">QR: any</option>
+            <option value="linked">QR linked</option>
+            <option value="none">No QR yet</option>
+          </select>
           {hasFilters && <button className="chip-clear" onClick={() => setParams({}, { replace: true })}>Clear filters</button>}
           {state.attention && <span className="tag">Requires attention</span>}
+          {state.mine && <span className="tag">My assets</span>}
         </div>
 
         {error && <div className="notice red" style={{ margin: 14 }}>{error.message}</div>}

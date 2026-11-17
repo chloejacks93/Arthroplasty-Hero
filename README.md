@@ -149,4 +149,30 @@ The source data showed that a catalog + serial identifies an **instrument set, n
 - **Legacy `.xls` (Excel 97–2003) is not accepted yet.** The library that reads it safely is published only on a download site this build environment can't reach, and the npm copy has known vulnerabilities. Uploading an `.xls` explains how to re-save it as `.xlsx` in a few seconds. The supplied files are all `.xlsx`.
 - `npm audit` reports a build-time-only ReDoS advisory in `picomatch` (used by Vite). No fixed version has been published yet. It doesn't affect the deployed app. Recheck when a patch is released.
 
-**Not yet built (later phases):** QR camera scanning and linking (3), transfer and receipt workflows (4), admin screens for users, teams and facilities (5), audits and utilization reports (6), notifications UI and PWA (7).
+### Phase 3: Asset registry and existing-QR scanning ✅
+
+**Confirmed data mapping:** *Warehouse* = team, *Chattanooga Main HQ* = warehouse, *Tub* = tote.
+
+**Scanning**
+- **Scan Asset** (sidebar, top-bar button, and the first tile on the representative home screen) opens the phone's rear camera in the browser. There's no app to install and no relabeling. Codes are decoded on the device with jsQR, which works in iPhone Safari (Safari doesn't provide the built-in barcode API).
+- The scanned value is the permanent identifier. Bare UUIDs are lower-cased; a URL that contains a UUID resolves to the UUID; any other random string is kept as-is. Matching is case- and whitespace-insensitive.
+- **A linked label** shows the asset (location, rep, team, status, previous scan). The scan is recorded on the asset and in a permanent scan log. Repeated reads by the same person within 2 minutes add only one history entry.
+- **A rep scanning another team's tray** still sees what it is, so physical possession is never a dead end. The scan is recorded, but the full record stays within team permissions.
+- **An unrecognized label** opens a matching screen: search unlinked assets by name, lot or location and pick one. Inventory, management and admins link it immediately. Reps send a **link request** that an inventory lead approves or rejects on **QR Link Requests**, which has a nav badge and an in-app notification. Anyone scanning a code with a pending request sees who proposed which asset.
+- **Enter code manually** is always available, for damaged labels or when the camera is blocked.
+- The camera shuts off whenever a result is showing, when you leave the page, or when the app goes to the background. Blocked-camera, no-camera and camera-in-use states each explain what to do. On iPhone, the result replaces the camera view so it's on screen immediately.
+
+**Linking rules (enforced in the database and API)**
+- One active code per asset, and one asset per code. Linking a code that's already in use names the asset it belongs to.
+- Replacing or unlinking a code requires a reason. The old link is kept, inactive, in permanent history (`qr_linked` / `qr_unlinked` events).
+- **Scan to link** on an asset page walks an inventory lead through linking that specific asset. Registry filter **QR linked / No QR yet** shows what's left to link.
+
+**Representative home:** large *Scan asset*, *Find a tray* and *My assets* tiles above their scoped figures. *Transfer*, *Receive* and *Report a problem* arrive with Phase 4, when those workflows exist.
+
+**Tested**
+- **44 automated tests** (8 new): code normalization, matching and scan logging, de-duplication, cross-team scans, link/replace/unlink rules, the request → approve/reject flow, duplicate-request prevention, permissions, and the registry QR filter.
+- **Real camera decoding in Chromium,** with a generated video of a QR label as the camera feed (decoded in under 1 s). Tested: link via *Scan to link* on SMS-REVERS INSTR #5A, re-scan to the asset card, a rep on an iPhone 14 viewport scanning an unknown label, matching it to SMS-AUGMENTED MGS INSTR #1 and sending a request, admin approval, and manual entry lookup.
+- **Migration 003** applied on top of the database holding your 113 imported assets.
+- **Not yet tested on a physical iPhone.** This environment has no real device. The code follows Safari's requirements (inline, muted video, rear camera, HTTPS), but the first scans on a real phone after deploying are the real check. Camera access needs HTTPS, which Render provides.
+
+**Not yet built (later phases):** transfer and receipt workflows (4), admin screens for users, teams and facilities (5), audits and utilization reports (6), notifications UI and installable PWA (7).
