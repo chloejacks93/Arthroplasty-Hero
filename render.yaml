@@ -1,5 +1,5 @@
 # Render Blueprint — one web service + one managed PostgreSQL database.
-# Deploy: Render Dashboard → New → Blueprint → select this repository.
+# Deploy: Render Dashboard → New → Blueprint → select this repository (branch: main).
 # Plans are paid on purpose: Render's free Postgres expires after 30 days and has
 # no backups, which is not acceptable for a system of record. Adjust plans in the
 # Render dashboard if your organization uses different tiers.
@@ -8,7 +8,10 @@ services:
     name: arthroplasty-asset-control
     runtime: node
     plan: starter
-    buildCommand: npm ci --prefix client && npm run build --prefix client && npm ci --prefix server --omit=dev
+    region: virginia
+    branch: main
+    # Client build tools are devDependencies; NODE_ENV=production would make npm skip them.
+    buildCommand: npm ci --prefix client --include=dev && npm run build --prefix client && npm ci --prefix server --omit=dev
     # Migrations run first (advisory-locked, transactional); the server only starts if they succeed.
     startCommand: npm start --prefix server
     healthCheckPath: /healthz
@@ -27,10 +30,17 @@ services:
         value: "false"
       - key: TRANSFER_ACCEPT_HOURS
         value: "24"
+      # First administrator, created once on first start with a temporary password
+      # printed to the service log. Render asks for these when the Blueprint is created.
+      - key: INITIAL_ADMIN_EMAIL
+        sync: false
+      - key: INITIAL_ADMIN_NAME
+        sync: false
 
 databases:
   - name: arthroplasty-asset-control-db
     plan: basic-256mb
+    region: virginia
     databaseName: asset_control
     postgresMajorVersion: "16"
     ipAllowList: []   # no public access; only services in this Render account can connect

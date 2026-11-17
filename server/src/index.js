@@ -3,6 +3,10 @@ import { config } from './config.js';
 import { pool } from './db.js';
 import { sweepOverdueTransfers } from './lib/transfers.js';
 
+import { ensureInitialAdmin } from './bootstrap.js';
+
+await ensureInitialAdmin().catch((e) => console.error('[bootstrap] failed:', e.message));
+
 const app = createApp();
 const server = app.listen(config.port, () => {
   console.log(`[server] Arthroplasty Asset Control listening on :${config.port} (${config.env})`);
