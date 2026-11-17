@@ -8,6 +8,11 @@ import { applyAdminRecovery } from './recovery.js';
 
 await ensureInitialAdmin().catch((e) => console.error('[bootstrap] failed:', e.message));
 await applyAdminRecovery().catch((e) => console.error('[recovery] failed:', e.message));
+// Which administrator accounts exist (emails only, never passwords) — visible in the
+// hosting dashboard's private logs so the owner knows which address to sign in with.
+await pool.query(`SELECT email, (locked_until > now()) AS locked FROM users WHERE role = 'admin' AND active ORDER BY created_at`)
+  .then(({ rows }) => console.log(`[accounts] Administrator sign-in email(s): ${rows.map((r) => `${r.email}${r.locked ? ' (locked)' : ''}`).join(', ') || 'none yet'}`))
+  .catch(() => {});
 
 const app = createApp();
 const server = app.listen(config.port, () => {
