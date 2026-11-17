@@ -75,14 +75,19 @@ TEST_DATABASE_URL=postgres://USER:PASS@localhost:5432/asset_control_test npm tes
 
 ## Deploying to Render
 
-1. Render Dashboard → **New → Blueprint** → select this repository. `render.yaml` creates the web service and a PostgreSQL database and wires `DATABASE_URL` automatically.
-2. Plans are set to paid tiers (`starter` web, `basic-256mb` Postgres). Render's free Postgres expires after 30 days and has no backups. Paid Postgres includes automated daily backups and point-in-time recovery.
-3. Each deploy runs migrations before the server starts. Migrations are transactional, advisory-locked, and refuse to run if an applied migration file was edited. If a migration fails, the new version doesn't start and the previous deploy keeps serving.
-4. Create the first administrator once, from the service's **Shell** tab:
-   ```bash
-   cd server && ADMIN_EMAIL=you@company.com ADMIN_NAME="Your Name" ADMIN_PASSWORD='a-long-password' node scripts/create-admin.js
-   ```
-   The password is never logged. Change it after first sign-in if you typed it on a shared screen.
+1. **Render Dashboard → New → Blueprint.** Connect GitHub if asked, give Render access to `chloejacks93/Arthroplasty-Hero`, select it, and choose branch **`main`**.
+2. Render reads `render.yaml` and shows a **web service** (`starter`) and a **PostgreSQL 16 database** (`basic-256mb`), both in **Virginia**. `DATABASE_URL` is wired automatically; you never see or copy it.
+3. It asks for two values:
+   - `INITIAL_ADMIN_EMAIL`: your work email (you become the first administrator)
+   - `INITIAL_ADMIN_NAME`: your name
+4. Click **Apply**. The first build takes a few minutes. Each start runs database migrations first (transactional, locked, refuse edited migrations). If a migration fails, the new version doesn't start and the previous one keeps serving.
+5. Open the web service → **Logs**, find the box that says **Initial administrator**, and copy the **temporary password**. It's printed once, only in your private Render logs.
+6. Open the service URL (`https://arthroplasty-asset-control.onrender.com` or similar), sign in with your email and that temporary password, and set your own password.
+7. **Imports → New import:** upload your spreadsheets. Then **People → Add person** for each rep, and assign trays from the Asset Registry (select → *Assign rep / team*).
+
+Plans are paid on purpose: Render's free Postgres expires after 30 days and has no backups. Paid Postgres includes automated daily backups. Expect about $7/month (web) plus about $6/month (database) at current Render pricing; confirm in the Render dashboard.
+
+To recover admin access later, use the service **Shell**: `cd server && ADMIN_EMAIL=you@company.com ADMIN_NAME="Your Name" ADMIN_PASSWORD='a-long-password' node scripts/create-admin.js`.
 
 No secrets live in this repository. All credentials come from Render environment variables.
 
