@@ -38,7 +38,8 @@ export default function AssetDetail() {
     );
   }
   if (loading && !data) return <div className="center-fill"><div className="spinner" /></div>;
-  const { asset: a, events, transfers, sources, conflicts } = data;
+  const { asset: a, events, transfers, sources, conflicts, investigations = [], openTransfer } = data;
+  const me = meta?.me?.id;
 
   return (
     <>
@@ -55,7 +56,27 @@ export default function AssetDetail() {
             {a.description && <span>{a.description}</span>}
           </div>
         </div>
+        <div className="head-actions">
+          {!openTransfer && <Link className="btn btn-primary" to={`/transfer?asset=${a.id}`}><ArrowLeftRight aria-hidden /> Transfer</Link>}
+          {openTransfer?.recipient_id === me && <Link className="btn btn-primary" to="/receive"><CheckCircle2 aria-hidden /> Confirm receipt</Link>}
+          <Link className="btn" to={`/report?asset=${a.id}`} state={{ asset: a }}><AlertTriangle aria-hidden /> Report a problem</Link>
+        </div>
       </div>
+
+      {openTransfer && (
+        <div className={`notice ${openTransfer.overdue ? 'amber' : 'blue'}`} style={{ marginBottom: 16 }}>
+          <ArrowLeftRight aria-hidden />
+          <span>In transit: <strong>{openTransfer.from_facility || '—'} → {openTransfer.to_facility}</strong>, sent by {openTransfer.sender_name} to {openTransfer.recipient_id === me ? 'you' : openTransfer.recipient_name} {relTime(openTransfer.initiated_at)}.
+            {openTransfer.overdue ? ' Past its receipt deadline.' : ` Awaiting receipt by ${fmtDateTime(openTransfer.accept_by)}.`}{' '}
+            <Link to={`/transfers?status=any`}>Transfers</Link></span>
+        </div>
+      )}
+      {investigations.map((iv) => (
+        <div key={iv.id} className="notice red" style={{ marginBottom: 16 }}>
+          <AlertTriangle aria-hidden />
+          <span>Open investigation #{iv.case_ref} ({iv.kind.replace(/_/g, ' ')}), reported {relTime(iv.reported_at)}. <Link to={`/investigations/${iv.id}`}>View</Link></span>
+        </div>
+      ))}
 
       {conflicts.length > 0 && (
         <div className="notice amber" style={{ marginBottom: 16 }}>
@@ -120,7 +141,8 @@ export default function AssetDetail() {
                             {e.from_facility && e.to_facility && e.from_facility !== e.to_facility
                               ? ` · ${e.from_facility} → ${e.to_facility}`
                               : e.to_facility ? ` · ${e.to_facility}` : e.from_facility ? ` · from ${e.from_facility}` : ''}
-                            {e.to_custodian && e.to_custodian !== e.from_custodian ? ` · Custodian: ${e.to_custodian}` : ''}
+                            {e.to_custodian && e.to_custodian !== e.from_custodian
+                              ? (e.event_type === 'transfer_initiated' ? ` · To: ${e.to_custodian}` : ` · Custodian: ${e.to_custodian}`) : ''}
                           </div>
                         </div>
                         <span className="t-when" title={fmtDateTime(e.occurred_at)}>{fmtDateTime(e.occurred_at)}</span>

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Keyboard, ScanLine, MapPin, User, Users, Clock, ArrowRight, QrCode, Search, CheckCircle2, AlertTriangle, Link2, Send, X,
+  Keyboard, ScanLine, MapPin, PackageCheck, ArrowLeftRight, Flag, User, Users, Clock, ArrowRight, QrCode, Search, CheckCircle2, AlertTriangle, Link2, Send, X,
 } from 'lucide-react';
 import { api, qs } from '../lib/api.js';
 import { useMeta, refreshMeta } from '../lib/useApi.js';
 import { QrScanner } from '../components/QrScanner.jsx';
 import { StatusBadge } from '../components/StatusBadge.jsx';
+import { ConfirmModal } from './Receive.jsx';
 import { ASSET_TYPE, relTime, fmtDateTime } from '../lib/format.js';
 
 export default function Scan() {
@@ -90,7 +91,9 @@ export default function Scan() {
             </div>
           )}
           {phase === 'result' && result?.status === 'matched' && (
-            <MatchedCard r={result} linkTarget={linkTarget} target={target} onAgain={again} onOpen={() => navigate(`/assets/${result.asset.id}`)} />
+            <MatchedCard r={result} linkTarget={linkTarget} target={target} onAgain={again} facilities={meta?.facilities || []}
+              onOpen={() => navigate(`/assets/${result.asset.id}`)}
+              onReceived={() => refreshMeta()} />
           )}
           {phase === 'result' && result?.status === 'unknown' && (
             <UnknownCard r={result} canLink={!!meta?.permissions.linkQr} linkTarget={target}
@@ -102,8 +105,12 @@ export default function Scan() {
   );
 }
 
-function MatchedCard({ r, linkTarget, target, onAgain, onOpen }) {
+function MatchedCard({ r, linkTarget, target, onAgain, onOpen, onReceived, facilities }) {
   const a = r.asset;
+  const t = r.openTransfer;
+  const navigate = useNavigate();
+  const [receiving, setReceiving] = useState(false);
+  const [received, setReceived] = useState('');
   const wrongLink = linkTarget && linkTarget !== a.id;
   return (
     <div className="panel asset-card">
@@ -130,10 +137,26 @@ function MatchedCard({ r, linkTarget, target, onAgain, onOpen }) {
         <Fact icon={Users} k="Team" v={a.team_name || '—'} />
         <Fact icon={Clock} k="Previous scan" v={r.previousScanAt ? `${relTime(r.previousScanAt)} · ${fmtDateTime(r.previousScanAt)}` : 'First scan'} />
       </dl>
+      {received && <div className="notice green" style={{ margin: '0 16px 16px' }}><CheckCircle2 aria-hidden /><span>{received}</span></div>}
+      {t && !received && (
+        <div className={`notice ${t.isRecipient ? 'blue' : 'amber'}`} style={{ margin: '0 16px 16px' }}><ArrowLeftRight aria-hidden />
+          <span>{t.isRecipient
+            ? <>In transit <strong>to you</strong> at {t.to_facility}, sent by {t.sender_name}. Confirm receipt now that you have it.</>
+            : <>In transit to <strong>{t.recipient_name}</strong> at {t.to_facility} (T-{t.transfer_no}){t.overdue ? '. Past its receipt deadline' : ''}.</>}</span></div>
+      )}
       {!a.in_scope && (
         <div className="notice blue" style={{ margin: '0 16px 16px' }}><AlertTriangle aria-hidden />
           <span>This asset belongs to another team. Your scan has been recorded in its history.</span></div>
       )}
+      <div className="ac-actions">
+        {t?.isRecipient && !received && (
+          <button className="btn btn-primary btn-lg" onClick={() => setReceiving(true)}><PackageCheck aria-hidden /> Confirm receipt</button>
+        )}
+        {!t && a.in_scope && (
+          <button className="btn btn-lg" onClick={() => navigate(`/transfer?asset=${a.id}`)}><ArrowLeftRight aria-hidden /> Transfer</button>
+        )}
+        <button className="btn btn-lg" onClick={() => navigate(`/report?asset=${a.id}`, { state: { asset: a } })}><Flag aria-hidden /> Report a problem</button>
+      </div>
       <div className="ac-foot">
         <span className="subtle"><CheckCircle2 size={13} aria-hidden /> Scan recorded</span>
         <div className="seg">
@@ -141,6 +164,14 @@ function MatchedCard({ r, linkTarget, target, onAgain, onOpen }) {
           <button className="btn btn-primary btn-lg" onClick={onAgain}><ScanLine aria-hidden /> Scan next</button>
         </div>
       </div>
+      {receiving && (
+        <ConfirmModal
+          c={{ transfer: { ...t, reference: a.reference }, qr: r.qr_value }}
+          facilities={facilities}
+          onClose={() => setReceiving(false)}
+          onDone={(msg) => { setReceiving(false); setReceived(msg); onReceived(); }}
+        />
+      )}
     </div>
   );
 }

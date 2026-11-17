@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LayoutDashboard, Boxes, Search, LogOut, Menu, FileSpreadsheet, GitCompareArrows, ScanLine, QrCode } from 'lucide-react';
+import { LayoutDashboard, Boxes, Search, LogOut, Menu, FileSpreadsheet, GitCompareArrows, ScanLine, QrCode, PackageCheck, ArrowLeftRight, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../lib/auth.jsx';
 import { initials, ROLE_LABEL } from '../lib/format.js';
 import { refreshMeta, useMeta } from '../lib/useApi.js';
 import { BrandMark } from './BrandMark.jsx';
+import { NotificationBell } from './NotificationBell.jsx';
 
 // Navigation grows phase by phase. Only modules that are actually built are listed.
 function buildNav(meta) {
@@ -14,7 +15,10 @@ function buildNav(meta) {
       items: [
         { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
         { to: '/scan', label: 'Scan Asset', icon: ScanLine },
+        { to: '/receive', label: 'Receive', icon: PackageCheck, count: meta?.counts.incomingTransfers },
+        { to: '/transfers', label: 'Transfers', icon: ArrowLeftRight },
         { to: '/assets', label: 'Asset Registry', icon: Boxes },
+        { to: '/investigations', label: 'Investigations', icon: ShieldAlert, count: meta?.permissions.investigate ? meta?.counts.openInvestigations : 0 },
       ],
     },
   ];
@@ -82,6 +86,7 @@ export function Shell() {
             {location.pathname !== '/scan' && (
               <Link to="/scan" className="btn btn-primary scan-btn" aria-label="Scan asset"><ScanLine aria-hidden /><span>Scan</span></Link>
             )}
+            <NotificationBell />
             <span className="env-tag">{new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date())}</span>
           </div>
         </header>

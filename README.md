@@ -175,4 +175,41 @@ The source data showed that a catalog + serial identifies an **instrument set, n
 - **Migration 003** applied on top of the database holding your 113 imported assets.
 - **Not yet tested on a physical iPhone.** This environment has no real device. The code follows Safari's requirements (inline, muted video, rear camera, HTTPS), but the first scans on a real phone after deploying are the real check. Camera access needs HTTPS, which Render provides.
 
-**Not yet built (later phases):** transfer and receipt workflows (4), admin screens for users, teams and facilities (5), audits and utilization reports (6), notifications UI and installable PWA (7).
+### Phase 4: Transfers and receiving ✅
+
+**Transfer** (*Transfer asset* tile, *Transfer* on a scan result or asset page): scan or search for the tray, then choose **destination facility**, **receiving rep** (or "Me, I'm taking it there") and an optional reason (one-tap chips). The system records asset, origin facility, destination, sender, recipient, time and status automatically.
+- The asset becomes **In Transit**. Its recorded location and custodian **do not change until receipt is confirmed**, so the system never claims a move nobody has verified.
+- One open transfer per asset (database-enforced). Reps can only transfer assets in their scope; anyone holding another team's tray uses *Report a problem*.
+- The recipient gets an in-app notification immediately.
+
+**Receive** (*Receive asset* tile with a waiting count, *Receive* in the sidebar, or simply scanning the tray):
+- **Only the named recipient can confirm.** Managers can't confirm on someone's behalf; they cancel and re-send instead.
+- **If the tray has a linked QR label, receipt requires scanning that exact label.** A different label is refused. Trays with no label yet can be confirmed without a scan, and the record says so.
+- On confirmation, the location, custodian, status (warehouse or facility), last-transferred time and an immutable confirmation record update in one transaction. The sender is notified.
+- If it arrived somewhere other than planned, the recipient picks the actual facility and must add a note, and management is alerted.
+- **Not received** closes the transfer, marks the tray **Under Investigation**, opens an investigation linked to the transfer, and notifies the sender and management.
+
+**Cancel:** sender or management, with a required reason, before receipt. The asset returns to its previous status and the recipient is notified.
+
+**Overdue:** each transfer has a receipt deadline (`TRANSFER_ACCEPT_HOURS`, default 24). A background sweep every 15 minutes sends one reminder per day to the recipient, the sender and management. Overdue transfers are flagged across the app and counted on the dashboard.
+
+**Report a problem** (anyone, including for another team's tray). Choose from *Can't find it*, *Moved without a transfer*, *Wrong location on record*, *Damaged*, *Incomplete* or *Something else*, with an optional "where is it actually?" facility. Missing assets become **Missing**, and undocumented movement or location errors become **Under Investigation**. Damaged and incomplete reports leave the status alone. Management is notified.
+
+**Investigations** (management, inventory and admin; reporters see their own): take ownership, add notes, resolve or dismiss with a required outcome, and optionally **correct the live location** on resolution (writes `location_corrected`). Status is restored to what it was before the report unless changed. Every action goes into a permanent, append-only investigation log.
+
+**Notifications:** a bell in the top bar with unread count, a list and mark-as-read. Counts refresh every minute. Preferences, email and push follow in Phase 7.
+
+**Tested**
+- **53 automated tests** (9 new) covering:
+  - **Transfer and receipt rules:** the scope rule; In Transit without moving location or custodian; recipient notification; duplicate open transfers refused; recipient-only receipt (managers refused); label required and wrong label refused; no-label receipt; status and location after receipt; immutable confirmations and undeletable transfers.
+  - **Cancel and failure paths:** cancel permissions, reason and status restore; not received → investigation → manager resolves with location correction.
+  - **Overdue reminders:** one per day, to the recipient, sender and managers.
+  - **Report a problem:** list visibility, report kinds and status effects, the ownership → resolve log, and closed-investigation protection.
+- **Browser end-to-end on your imported data,** with the simulated camera showing the real linked label of SMS-AUGMENTED MGS INSTR #1:
+  - **Transfer:** Test Rep (iPhone) scans the tray and transfers it to Park Ridge Medical Center → Second Rep.
+  - **Receive:** Second Rep sees the bell and tile count, opens the notification, scans the tray, and confirms receipt. The asset shows Park Ridge in Second Rep's custody, with the full history in order.
+  - **Not received:** a no-label transfer of MGS INSTR #10 is reported not received; the admin resolves it, correcting the location to Chattanooga Main HQ.
+  - **Report:** a damage report is created from a scan.
+  - No page errors.
+
+**Not yet built (later phases):** admin screens for users, teams and facilities (5), audits and utilization reports (6), notification preferences, email/push and installable PWA (7).

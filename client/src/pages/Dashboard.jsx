@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Search as SearchIcon, Boxes as BoxesIcon, ArrowRight, ArrowLeftRight, CheckCircle2, FileSpreadsheet, QrCode, PackagePlus, AlertTriangle, Pencil, ScanLine, Stethoscope, ClipboardCheck, Circle } from 'lucide-react';
-import { useApi } from '../lib/useApi.js';
+import { PackageCheck, Search as SearchIcon, Boxes as BoxesIcon, ArrowRight, ArrowLeftRight, CheckCircle2, FileSpreadsheet, QrCode, PackagePlus, AlertTriangle, Pencil, ScanLine, Stethoscope, ClipboardCheck, Circle } from 'lucide-react';
+import { useApi, useMeta } from '../lib/useApi.js';
 import { useAuth, isOrgWide } from '../lib/auth.jsx';
 import { StatusBadge } from '../components/StatusBadge.jsx';
 import { DataTable } from '../components/DataTable.jsx';
@@ -16,6 +16,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data, error } = useApi('/dashboard');
+  const meta = useMeta();
   const k = data?.kpis;
   const orgWide = isOrgWide(user);
   const firstName = user.full_name.replace(/\(.*?\)/g, '').trim().split(' ')[0];
@@ -40,11 +41,17 @@ export default function Dashboard() {
       </div>
 
       {!orgWide && (
-        <nav className="action-tiles" aria-label="Quick actions">
+        <nav className="action-tiles six" aria-label="Quick actions">
           <Link to="/scan" className="tile tile-primary"><ScanLine aria-hidden /><strong>Scan asset</strong><span>Scan an existing QR label</span></Link>
+          <Link to="/transfer" className="tile"><ArrowLeftRight aria-hidden /><strong>Transfer asset</strong><span>Send a tray to a facility or rep</span></Link>
+          <Link to="/receive" className="tile">
+            <PackageCheck aria-hidden /><strong>Receive asset{meta?.counts.incomingTransfers > 0 && <em className="tile-count">{meta.counts.incomingTransfers}</em>}</strong>
+            <span>{meta?.counts.incomingTransfers ? `${meta.counts.incomingTransfers} waiting for you` : 'Confirm what you received'}</span>
+          </Link>
           <Link to="/assets" className="tile" onClick={() => setTimeout(() => document.querySelector('.toolbar .search input')?.focus(), 150)}>
             <SearchIcon aria-hidden /><strong>Find a tray</strong><span>Search by name, lot or facility</span></Link>
           <Link to="/assets?mine=1" className="tile"><BoxesIcon aria-hidden /><strong>My assets</strong><span>Assigned to you or in your custody</span></Link>
+          <Link to="/report" className="tile"><AlertTriangle aria-hidden /><strong>Report a problem</strong><span>Missing, damaged or moved</span></Link>
         </nav>
       )}
 
@@ -64,7 +71,7 @@ export default function Dashboard() {
           <span className="kpi-value">{v(k?.at_warehouse)}</span>
           <span className="kpi-sub">{k ? `${fmtNum(k.out_of_service)} out of service` : ' '}</span>
         </Link>
-        <Link to="/assets?status=in_transit" className="kpi tone-blue">
+        <Link to="/transfers" className="kpi tone-blue">
           <span className="kpi-label"><span className="kpi-dot" />In transit</span>
           <span className="kpi-value">{v(k?.in_transit)}</span>
           <span className="kpi-sub">{k ? `${fmtNum(k.awaiting)} awaiting receipt` : ' '}</span>

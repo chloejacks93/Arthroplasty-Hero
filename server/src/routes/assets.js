@@ -126,7 +126,7 @@ router.get('/:id', async (req, res) => {
   if (!rows[0]) throw notFound('Asset not found or not visible to you.');
   const asset = { ...rows[0], asset_code: assetCode(rows[0].asset_no) };
 
-  const [events, transfers, sources, conflicts] = await Promise.all([
+  const [events, transfers, sources, conflicts, investigations] = await Promise.all([
     query(
       `SELECT e.id, e.event_type, e.occurred_at, e.from_status, e.to_status, e.details,
               u.full_name AS actor_name, ff.name AS from_facility, tf.name AS to_facility,
@@ -140,6 +140,7 @@ router.get('/:id', async (req, res) => {
         WHERE e.asset_id = $1 ORDER BY e.occurred_at DESC, e.id DESC LIMIT 200`, [id]),
     query(
       `SELECT t.id, t.transfer_no, t.status, t.initiated_at, t.received_at, t.accept_by, t.reason,
+              t.recipient_id, t.sender_id, (t.status = 'in_transit' AND t.accept_by < now()) AS overdue,
               ff.name AS from_facility, tf.name AS to_facility,
               s.full_name AS sender_name, rc.full_name AS recipient_name
          FROM transfers t
@@ -154,8 +155,14 @@ router.get('/:id', async (req, res) => {
         WHERE s.asset_id = $1 ORDER BY s.field, s.recorded_at`, [id]),
     query(`SELECT id, field, current_value, proposed_value, severity, status, created_at
              FROM asset_conflicts WHERE asset_id = $1 AND status = 'open' ORDER BY created_at`, [id]),
+    query(`SELECT id, case_ref, kind, status, reported_at FROM investigations
+            WHERE asset_id = $1 AND status IN ('open','investigating') ORDER BY reported_at DESC`, [id]),
   ]);
-  res.json({ asset, events: events.rows, transfers: transfers.rows, sources: sources.rows, conflicts: conflicts.rows });
+  const openTransfer = transfers.rows.find((t) => t.status === 'in_transit') || null;
+  res.json({
+    asset, events: events.rows, transfers: transfers.rows, sources: sources.rows, conflicts: conflicts.rows,
+    investigations: investigations.rows, openTransfer,
+  });
 });
 
 export default router;

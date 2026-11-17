@@ -11,6 +11,11 @@ import ImportBatch from './pages/ImportBatch.jsx';
 import Conflicts from './pages/Conflicts.jsx';
 import Scan from './pages/Scan.jsx';
 import QrRequests from './pages/QrRequests.jsx';
+import Transfer from './pages/Transfer.jsx';
+import Receive from './pages/Receive.jsx';
+import Transfers from './pages/Transfers.jsx';
+import Report from './pages/Report.jsx';
+import Investigations, { InvestigationDetail } from './pages/Investigations.jsx';
 
 export default function App() {
   const { user } = useAuth();
@@ -28,6 +33,12 @@ export default function App() {
         <Route path="conflicts" element={<Conflicts />} />
         <Route path="scan" element={<Scan />} />
         <Route path="qr-requests" element={<QrRequests />} />
+        <Route path="transfer" element={<Transfer />} />
+        <Route path="receive" element={<Receive />} />
+        <Route path="transfers" element={<Transfers />} />
+        <Route path="report" element={<Report />} />
+        <Route path="investigations" element={<Investigations />} />
+        <Route path="investigations/:id" element={<InvestigationDetail />} />
         <Route path="*" element={<div className="empty"><strong>Page not found</strong><Link to="/">Return to dashboard</Link></div>} />
       </Route>
     </Routes>

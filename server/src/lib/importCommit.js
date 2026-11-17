@@ -212,8 +212,9 @@ async function linkQr(c, assetId, value, userId) {
 export async function event(c, assetId, type, actorId, e = {}) {
   await c.query(
     `INSERT INTO asset_events (asset_id, event_type, actor_id, from_facility_id, to_facility_id, from_custodian_id, to_custodian_id,
-                               from_status, to_status, import_id, details)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+                               from_status, to_status, import_id, transfer_id, investigation_id, details)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
     [assetId, type, actorId, e.from_facility_id || null, e.to_facility_id || null, e.from_custodian_id || null,
-      e.to_custodian_id || null, e.from_status || null, e.to_status || null, e.import_id || null, JSON.stringify(e.details || {})]);
+      e.to_custodian_id || null, e.from_status || null, e.to_status || null, e.import_id || null,
+      e.transfer_id || null, e.investigation_id || null, JSON.stringify(e.details || {})]);
 }

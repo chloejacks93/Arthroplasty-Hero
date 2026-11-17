@@ -63,7 +63,16 @@ router.post('/scan', async (req, res) => {
     if (!recent) {
       await event(c, link.asset_id, 'scanned', req.user.id, { details: { source } });
     }
-    return { status: 'matched', qr_value: qr, asset: before, previousScanAt: before.last_scanned_at };
+    const { rows: [open] } = await c.query(
+      `SELECT t.id, t.transfer_no, t.recipient_id, t.sender_id, rc.full_name AS recipient_name, s.full_name AS sender_name,
+              tf.name AS to_facility, t.to_facility_id, t.accept_by, (t.accept_by < now()) AS overdue
+         FROM transfers t JOIN users rc ON rc.id = t.recipient_id JOIN users s ON s.id = t.sender_id
+         JOIN facilities tf ON tf.id = t.to_facility_id
+        WHERE t.asset_id = $1 AND t.status = 'in_transit'`, [link.asset_id]);
+    return {
+      status: 'matched', qr_value: qr, asset: before, previousScanAt: before.last_scanned_at,
+      openTransfer: open ? { ...open, isRecipient: open.recipient_id === req.user.id, isSender: open.sender_id === req.user.id } : null,
+    };
   });
   res.json({ ...result, permissions: { linkQr: can.linkQr(req.user) } });
 });
