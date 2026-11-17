@@ -76,7 +76,7 @@ TEST_DATABASE_URL=postgres://USER:PASS@localhost:5432/asset_control_test npm tes
 ## Deploying to Render
 
 1. **Render Dashboard → New → Blueprint.** Connect GitHub if asked, give Render access to `chloejacks93/Arthroplasty-Hero`, select it, and choose branch **`main`**.
-2. Render reads `render.yaml` and shows a **web service** (`starter`) and a **PostgreSQL 16 database** (`basic-256mb`), both in **Virginia**. `DATABASE_URL` is wired automatically; you never see or copy it.
+2. Render reads `render.yaml` and shows a **web service** and a **PostgreSQL 16 database**, both on the **free** plan in **Virginia**. `DATABASE_URL` is wired automatically; you never see or copy it.
 3. It asks for two values:
    - `INITIAL_ADMIN_EMAIL`: your work email (you become the first administrator)
    - `INITIAL_ADMIN_NAME`: your name
@@ -85,9 +85,12 @@ TEST_DATABASE_URL=postgres://USER:PASS@localhost:5432/asset_control_test npm tes
 6. Open the service URL (`https://arthroplasty-asset-control.onrender.com` or similar), sign in with your email and that temporary password, and set your own password.
 7. **Imports → New import:** upload your spreadsheets. Then **People → Add person** for each rep, and assign trays from the Asset Registry (select → *Assign rep / team*).
 
-Plans are paid on purpose: Render's free Postgres expires after 30 days and has no backups. Paid Postgres includes automated daily backups. Expect about $7/month (web) plus about $6/month (database) at current Render pricing; confirm in the Render dashboard.
+**Plan: free (trial).** `render.yaml` uses Render's free web service and free PostgreSQL.
+- **The free database expires about 30 days after creation and has no backups.** Before then, open the database in Render and **upgrade** it (e.g. *Basic-256mb*, about $6/month). The upgrade keeps all data. Set a calendar reminder for day 25.
+- The free web service **sleeps after 15 minutes** without visitors; the next visit takes about a minute to wake it. Overdue-transfer reminders pause while it sleeps and catch up when it wakes.
+- To move fully to production, change `plan: free` to `starter` (web) and `basic-256mb` (database) in `render.yaml`, or change the plans in the Render dashboard.
 
-To recover admin access later, use the service **Shell**: `cd server && ADMIN_EMAIL=you@company.com ADMIN_NAME="Your Name" ADMIN_PASSWORD='a-long-password' node scripts/create-admin.js`.
+To recover admin access later (the **Shell** tab requires a paid web plan): `cd server && ADMIN_EMAIL=you@company.com ADMIN_NAME="Your Name" ADMIN_PASSWORD='a-long-password' node scripts/create-admin.js`.
 
 No secrets live in this repository. All credentials come from Render environment variables.
 
