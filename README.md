@@ -37,7 +37,7 @@ render.yaml        Render Blueprint (web service + database)
 | `facilities`, `teams`, `users`, `user_teams` | Configurable directory. Nothing is hard-coded. Records are deactivated, never deleted. |
 | `cases`, `case_assets` | Case assignments kept **separate** from physical movement. No patient fields. |
 | `audits`, `audit_scans` | Physical inventory reconciliation. |
-| `import_batches`, `imports`, `import_rows`, `asset_field_sources`, `asset_conflicts` | Multi-spreadsheet import with per-field provenance and conflict review. |
+| `import_batches`, `imports`, `import_rows`, `asset_field_sources`, `asset_conflicts`, `name_aliases` | Multi-spreadsheet import with per-field provenance, conflict review, and remembered name variants for facilities and teams. |
 | `investigations` | Problem reports and undocumented-movement investigations. |
 | `notifications`, `notification_preferences` | Per-user notifications and preferences. |
 
@@ -46,7 +46,7 @@ render.yaml        Render Blueprint (web service + database)
 | Role | Sees | Can |
 |---|---|---|
 | `admin` | Everything | Manage users, teams, facilities, plus everything below |
-| `manager` | Everything | Reports, resolve conflicts, link QR codes, investigations |
+| `manager` | Everything | Imports, reports, resolve conflicts, link QR codes, investigations |
 | `inventory` | Everything | Imports, audits, link QR codes, investigations |
 | `rep` | Assets in their teams, assigned to them, in their custody, or in a transfer they're part of | Scan, transfer, receive, report problems |
 
@@ -110,4 +110,43 @@ No secrets live in this repository. All credentials come from Render environment
 - Production build and start simulated locally with the exact Render commands, with migrations running at boot.
 - UI checked in Chromium at desktop (1440×900) and iPhone 14 sizes.
 
-**Not yet built (later phases):** spreadsheet import (Phase 2), QR camera scanning and linking (3), transfer and receipt workflows (4), admin screens for users, teams and facilities (5), audits, reports and Excel export (6), notifications and PWA (7). The schema for all of these is already in place.
+### Phase 2: Master asset database and multi-spreadsheet importer ✅
+
+**How an import works**
+1. **Upload** one or more `.xlsx` or `.csv` files (up to 10 files, 10 MB each). The header row is found automatically, even below a report title, and every value is parsed from text: `$36,000.00`, `25.0`, `Overstocked⏎Understocked`. Optionally assign all rows of a file to a team.
+2. **Preview.** Nothing is written yet. Every row is classified as New, Update, Duplicate, Conflict, Needs decision, Warning or Error.
+3. **Map values.** Each *Warehouse* value maps to a team and each *Location* to a facility, either existing or created, with the facility type guessed from the name (HQ means warehouse, SURG CTR means surgery center, and so on). A name variant mapped to an existing facility is remembered for future imports.
+4. **Decide** rows that share a Reference with an existing asset but differ in identifying details: same asset, different asset, or skip. Approval is blocked until every one is decided.
+5. **Approve.** The import runs in one transaction under a lock, using the same analysis shown in the preview. Every change writes a permanent event.
+
+**Matching priority.** Two rows are never merged on name alone.
+1. Existing QR UUID (if a sheet has a QR/UUID column)
+2. Catalog + serial **and** the same Reference
+3. Reference + Lot, exactly
+4. Reference only, which needs a human decision
+
+The source data showed that a catalog + serial identifies an **instrument set, not a tray**. For example, SMS-REVERS INSTR #5A, #5B and #5C all carry AR-9501HS SN 642, and seven groups like this exist. A serial on its own is therefore never used as a tray identifier. Sibling trays stay separate records, and the preview notes the set they belong to.
+
+**Field policy when a row matches an existing asset**
+- Live custody fields (current facility, team, assigned rep) are **never silently overwritten**. A difference becomes a critical conflict. Empty fields are filled.
+- The asset name (Reference) is never changed by an import.
+- Descriptive and utilization fields take the newer spreadsheet value, recorded in history.
+- When two files in the same batch disagree, the first file's value is kept and the other becomes a conflict.
+- Re-importing the same change doesn't create duplicate conflicts. Re-uploading an identical file is flagged as already imported.
+
+**Lot parsing.** The original Lot text is preserved verbatim. Catalog, batch and serial are parsed from 12 observed formats (e.g. `AR-9501HS BATCH# 14919754 SN# 808`, `(AR-9615CGS) BATCH/SN# 15483773/59`, `AR-9226CS - 10597429/275`). When the Lot column and Notes disagree, the row is flagged for verification rather than guessed.
+
+**Also built:** import history (file, date, uploader, new, updated, duplicates, conflicts with live open count); a Conflicts screen with keep-current or use-spreadsheet decisions, individually or in bulk, where accepting a location writes a `location_corrected` event; per-field provenance on each asset (which spreadsheet supplied which value); a navigation badge for open conflicts and an in-app notification to managers when an import creates conflicts; and a **master Excel export** (36 columns, frozen header, filters, respects the registry's current filters and the user's visibility).
+
+**Tested**
+- **Real data:** all four supplied spreadsheets (123 rows) through the API and in the browser. Result: **112 unique assets, 11 cross-file duplicates combined, 0 false merges**, 4 teams and 9 facilities proposed. Seven multi-tray sets were kept separate, and two real Lot/Notes discrepancies were flagged (SMS-REVERS INSTR #6C and SMS-AUGMENTED MGS INSTR #1).
+- **Edited copy of a real sheet:** moved location → critical conflict, live location unchanged, newer utilization applied. Changed lot → blocked for decision. Changed team → conflict. New kit → created. Conflict resolution → location moved, with the event in history.
+- **36 automated tests:** 14 new for the importer (parser formats, value parsing, overlapping files, sibling trays, re-import, conflict and resolution, review decisions, remembered aliases, per-file team, permissions, .xls rejection, Excel export) plus the 22 from Phase 1. The test fixtures are synthetic. The real spreadsheets are **not** in the repository because they contain surgeon names and business data.
+- **Migration 002** applied on top of a Phase 1 database containing data.
+- **Desktop (1440 px) and iPhone 14** layouts for upload, review, conflicts and history.
+
+**Known limitations**
+- **Legacy `.xls` (Excel 97–2003) is not accepted yet.** The library that reads it safely is published only on a download site this build environment can't reach, and the npm copy has known vulnerabilities. Uploading an `.xls` explains how to re-save it as `.xlsx` in a few seconds. The supplied files are all `.xlsx`.
+- `npm audit` reports a build-time-only ReDoS advisory in `picomatch` (used by Vite). No fixed version has been published yet. It doesn't affect the deployed app. Recheck when a patch is released.
+
+**Not yet built (later phases):** QR camera scanning and linking (3), transfer and receipt workflows (4), admin screens for users, teams and facilities (5), audits and utilization reports (6), notifications UI and PWA (7).

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, QrCode } from 'lucide-react';
+import { Search, QrCode, Download } from 'lucide-react';
 import { useApi } from '../lib/useApi.js';
 import { qs } from '../lib/api.js';
 import { useAuth, isOrgWide } from '../lib/auth.jsx';
@@ -72,6 +72,11 @@ export default function Assets() {
         <div>
           <h1>Asset registry</h1>
           <p>{isOrgWide(user) ? 'Every registered tray, tote and set across the organization.' : 'Assets in your teams and custody.'}</p>
+        </div>
+        <div className="head-actions">
+          <a className="btn" href={`/api/exports/assets.xlsx${qs({ q: state.q, status: state.status, asset_type: state.asset_type, team_id: state.team_id, facility_id: state.facility_id, rep_id: state.rep_id, attention: state.attention, mine: state.mine })}`} download>
+            <Download aria-hidden /> Export to Excel
+          </a>
         </div>
       </div>
 

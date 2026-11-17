@@ -40,12 +40,11 @@ test('an asset can have only one active QR link', async () => {
   );
 });
 
-test('serial numbers are unique when present, case-insensitive', async () => {
-  await makeAsset({ reference: 'S1', serial_number: 'SN-100' });
-  await rejects(makeAsset({ reference: 'S2', serial_number: 'sn-100' }), /assets_serial_uq/);
-  // Blank / missing serials never collide
-  await makeAsset({ reference: 'S3', serial_number: null });
-  await makeAsset({ reference: 'S4', serial_number: null });
+test('a set serial may be shared by sibling trays (e.g. #5A/#5B/#5C), so it is not a unique key', async () => {
+  await makeAsset({ reference: 'SET #5A', catalog_number: 'AR-9501HS', serial_number: '642' });
+  await makeAsset({ reference: 'SET #5B', catalog_number: 'AR-9501HS', serial_number: '642' });
+  const { rows } = await pool.query(`SELECT count(*)::int AS n FROM assets WHERE serial_number = '642'`);
+  assert.equal(rows[0].n, 2);
 });
 
 test('asset event ledger is append-only (no UPDATE, DELETE or TRUNCATE)', async () => {

@@ -32,7 +32,18 @@ async function request(method, url, body) {
 export const api = {
   get: (url) => request('GET', url),
   post: (url, body = {}) => request('POST', url, body),
+  put: (url, body = {}) => request('PUT', url, body),
   patch: (url, body = {}) => request('PATCH', url, body),
+  /** multipart upload (FormData); the browser sets the boundary header. */
+  upload: async (url, formData) => {
+    const res = await fetch(`/api${url}`, {
+      method: 'POST', credentials: 'same-origin', headers: { 'x-requested-with': 'fetch' }, body: formData,
+    });
+    let data = null;
+    try { data = await res.json(); } catch { /* empty */ }
+    if (!res.ok) throw new ApiError(res.status, data?.error || `Upload failed (${res.status})`, data?.details);
+    return data;
+  },
 };
 
 export const qs = (obj) => {

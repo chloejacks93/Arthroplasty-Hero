@@ -59,6 +59,7 @@ export function buildAssetFilter(user, f) {
     else {
       add(`(a.reference ILIKE ? OR a.description ILIKE ? OR a.lot ILIKE ? OR a.serial_number ILIKE ?
             OR f.name ILIKE ? OR r.full_name ILIKE ? OR a.source_location ILIKE ?
+            OR a.catalog_number ILIKE ? OR a.batch_number ILIKE ? OR a.notes ILIKE ?
             OR EXISTS (SELECT 1 FROM asset_qr_codes q WHERE q.asset_id = a.id AND q.active AND q.qr_value ILIKE ?))`,
       `%${f.q.replace(/[%_\\]/g, '\\$&')}%`);
     }

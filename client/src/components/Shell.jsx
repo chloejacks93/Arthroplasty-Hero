@@ -1,26 +1,37 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LayoutDashboard, Boxes, Search, LogOut, Menu } from 'lucide-react';
+import { LayoutDashboard, Boxes, Search, LogOut, Menu, FileSpreadsheet, GitCompareArrows } from 'lucide-react';
 import { useAuth } from '../lib/auth.jsx';
 import { initials, ROLE_LABEL } from '../lib/format.js';
+import { refreshMeta, useMeta } from '../lib/useApi.js';
 import { BrandMark } from './BrandMark.jsx';
 
 // Navigation grows phase by phase. Only modules that are actually built are listed.
-const NAV = [
-  {
-    label: 'Operations',
-    items: [
-      { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-      { to: '/assets', label: 'Asset Registry', icon: Boxes },
-    ],
-  },
-];
+function buildNav(meta) {
+  const nav = [
+    {
+      label: 'Operations',
+      items: [
+        { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+        { to: '/assets', label: 'Asset Registry', icon: Boxes },
+      ],
+    },
+  ];
+  const data = [];
+  if (meta?.permissions.importData) data.push({ to: '/imports', label: 'Imports', icon: FileSpreadsheet });
+  if (meta?.permissions.resolveConflicts) data.push({ to: '/conflicts', label: 'Conflicts', icon: GitCompareArrows, count: meta.counts.openConflicts });
+  if (data.length) nav.push({ label: 'Data', items: data });
+  return nav;
+}
 
 export function Shell() {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const meta = useMeta();
+  const NAV = buildNav(meta);
   useEffect(() => setOpen(false), [location.pathname]);
+  useEffect(() => { refreshMeta(); }, [user.id]);
 
   return (
     <div className={`shell${open ? ' nav-open' : ''}`}>
@@ -36,9 +47,10 @@ export function Shell() {
           {NAV.map((section) => (
             <div className="nav-section" key={section.label}>
               <div className="nav-label">{section.label}</div>
-              {section.items.map(({ to, label, icon: Icon, end }) => (
+              {section.items.map(({ to, label, icon: Icon, end, count }) => (
                 <NavLink key={to} to={to} end={end} className="nav-link">
                   <Icon aria-hidden /> {label}
+                  {count > 0 && <span className="count" aria-label={`${count} open`}>{count}</span>}
                 </NavLink>
               ))}
             </div>

@@ -6,7 +6,7 @@ export const ORG_WIDE = new Set(['admin', 'manager', 'inventory']);
 export const can = {
   viewAll: (u) => ORG_WIDE.has(u.role),
   administer: (u) => u.role === 'admin',
-  importData: (u) => ['admin', 'inventory'].includes(u.role),
+  importData: (u) => ['admin', 'manager', 'inventory'].includes(u.role),
   resolveConflicts: (u) => ['admin', 'manager', 'inventory'].includes(u.role),
   linkQr: (u) => ['admin', 'manager', 'inventory'].includes(u.role),
   investigate: (u) => ['admin', 'manager', 'inventory'].includes(u.role),

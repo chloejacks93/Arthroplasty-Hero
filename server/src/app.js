@@ -13,6 +13,9 @@ import authRoutes from './routes/auth.js';
 import assetRoutes from './routes/assets.js';
 import dashboardRoutes from './routes/dashboard.js';
 import metaRoutes from './routes/meta.js';
+import importRoutes from './routes/imports.js';
+import conflictRoutes from './routes/conflicts.js';
+import exportRoutes from './routes/exports.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -66,6 +69,9 @@ export function createApp() {
   api.use('/dashboard', dashboardRoutes);
   api.use('/assets', assetRoutes);
   api.use('/meta', metaRoutes);
+  api.use('/imports', importRoutes);
+  api.use('/conflicts', conflictRoutes);
+  api.use('/exports', exportRoutes);
   api.use((_req, _res, next) => next(new HttpError(404, 'Unknown API endpoint.')));
   app.use('/api', api);
 

@@ -5,6 +5,10 @@ import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Assets from './pages/Assets.jsx';
 import AssetDetail from './pages/AssetDetail.jsx';
+import Imports from './pages/Imports.jsx';
+import ImportNew from './pages/ImportNew.jsx';
+import ImportBatch from './pages/ImportBatch.jsx';
+import Conflicts from './pages/Conflicts.jsx';
 
 export default function App() {
   const { user } = useAuth();
@@ -16,6 +20,10 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="assets" element={<Assets />} />
         <Route path="assets/:id" element={<AssetDetail />} />
+        <Route path="imports" element={<Imports />} />
+        <Route path="imports/new" element={<ImportNew />} />
+        <Route path="imports/:id" element={<ImportBatch />} />
+        <Route path="conflicts" element={<Conflicts />} />
         <Route path="*" element={<div className="empty"><strong>Page not found</strong><Link to="/">Return to dashboard</Link></div>} />
       </Route>
     </Routes>

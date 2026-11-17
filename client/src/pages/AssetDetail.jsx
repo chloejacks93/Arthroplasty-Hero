@@ -15,6 +15,10 @@ const SOURCE_FIELD_LABEL = {
   reference: 'Reference', description: 'Description', source_type: 'Type', agency: 'Agency',
   source_warehouse: 'Warehouse', source_location: 'Location', lot: 'Lot', consignment_fee: 'Consignment fee',
   return_date: 'Return date', items_count: 'Items', flags: 'Flags', notes: 'Notes',
+  catalog_number: 'Catalog #', batch_number: 'Batch #', serial_number: 'Serial #', qr_value: 'QR UUID',
+  set_utilization_factor: 'Set utilization factor', definition_value: 'Definition value', total_cases_12m: 'Cases, last 12 months',
+  top_hcp: 'Top HCP', top_hcp_sales: 'Top HCP sales', top_hcp_cases: 'Top HCP cases', days_since_last_case: 'Days since last case',
+  current_facility: 'Location', team: 'Team', assigned_rep: 'Representative',
 };
 
 export default function AssetDetail() {
@@ -54,7 +58,8 @@ export default function AssetDetail() {
         <div className="notice amber" style={{ marginBottom: 16 }}>
           <AlertTriangle aria-hidden />
           <span>{conflicts.length} unresolved import conflict{conflicts.length > 1 ? 's' : ''} on this asset
-            ({[...new Set(conflicts.map((c) => c.field))].join(', ')}). Live location was not overwritten.</span>
+            ({[...new Set(conflicts.map((c) => SOURCE_FIELD_LABEL[c.field] || c.field.replace('_', ' ')))].join(', ')}). Live values were not overwritten.{' '}
+            <Link to={`/conflicts?asset_id=${a.id}`}>Review</Link></span>
         </div>
       )}
 
@@ -66,7 +71,9 @@ export default function AssetDetail() {
               <Fact k="Reference" v={a.reference} />
               <Fact k="Type" v={ASSET_TYPE[a.asset_type]} sub={a.source_type && a.source_type !== ASSET_TYPE[a.asset_type] ? `Source: ${a.source_type}` : null} />
               <Fact k="Lot" v={a.lot} mono />
-              <Fact k="Serial number" v={a.serial_number} mono />
+              <Fact k="Catalog · Batch · Serial" v={a.catalog_number || a.batch_number || a.serial_number
+                ? [a.catalog_number, a.batch_number && `Batch ${a.batch_number}`, a.serial_number && `SN ${a.serial_number}`].filter(Boolean).join(' · ') : null}
+                sub={a.serial_number ? 'Set serial: may be shared by sibling trays' : null} />
               <Fact k="Agency" v={a.agency} />
               <Fact k="Items" v={a.items_count != null ? fmtNum(a.items_count) : null} />
               <Fact k="Consignment fee" v={a.consignment_fee != null ? fmtMoney(a.consignment_fee) : null} />
