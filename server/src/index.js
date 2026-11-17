@@ -4,8 +4,10 @@ import { pool } from './db.js';
 import { sweepOverdueTransfers } from './lib/transfers.js';
 
 import { ensureInitialAdmin } from './bootstrap.js';
+import { applyAdminRecovery } from './recovery.js';
 
 await ensureInitialAdmin().catch((e) => console.error('[bootstrap] failed:', e.message));
+await applyAdminRecovery().catch((e) => console.error('[recovery] failed:', e.message));
 
 const app = createApp();
 const server = app.listen(config.port, () => {

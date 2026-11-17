@@ -91,7 +91,9 @@ TEST_DATABASE_URL=postgres://USER:PASS@localhost:5432/asset_control_test npm tes
 - The free web service **sleeps after 15 minutes** without visitors; the next visit takes about a minute to wake it. Overdue-transfer reminders pause while it sleeps and catch up when it wakes.
 - To move fully to production, change `plan: free` to `starter` (web) and `basic-256mb` (database) in `render.yaml`, or change the plans in the Render dashboard.
 
-To recover admin access later (the **Shell** tab requires a paid web plan): `cd server && ADMIN_EMAIL=you@company.com ADMIN_NAME="Your Name" ADMIN_PASSWORD='a-long-password' node scripts/create-admin.js`.
+**Locked out or forgot the admin password?** Web service → **Environment** → add `ADMIN_RECOVERY_PASSWORD` = a temporary password you choose (10+ characters) → **Save, rebuild, and deploy**. Sign in with your admin email and that password, choose a new one, then delete the setting. Each value works once; it's never logged.
+
+Alternative with a paid web plan (**Shell** tab): `cd server && ADMIN_EMAIL=you@company.com ADMIN_NAME="Your Name" ADMIN_PASSWORD='a-long-password' node scripts/create-admin.js`.
 
 No secrets live in this repository. All credentials come from Render environment variables.
 

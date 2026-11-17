@@ -46,6 +46,10 @@ services:
       # administrator who has never signed in. Remove it after your first sign-in.
       - key: INITIAL_ADMIN_PASSWORD
         sync: false
+      # Locked out / forgot password (free plan has no Shell): set a temporary
+      # password here, redeploy, sign in, choose a new one, then delete this.
+      - key: ADMIN_RECOVERY_PASSWORD
+        sync: false
 
 databases:
   - name: arthroplasty-asset-control-db

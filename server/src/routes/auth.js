@@ -42,8 +42,13 @@ router.post('/login', loginLimiter, async (req, res) => {
   if (!usable || !ok) {
     if (usable) {
       await query(
-        `UPDATE users SET failed_logins = failed_logins + 1,
-                locked_until = CASE WHEN failed_logins + 1 >= $2 THEN now() + make_interval(mins => $3) END
+        // After a lock expires the count starts over, so one more typo doesn't re-lock immediately.
+        `UPDATE users SET
+                failed_logins = CASE WHEN locked_until IS NOT NULL AND locked_until <= now() THEN 1 ELSE failed_logins + 1 END,
+                locked_until = CASE
+                  WHEN locked_until IS NOT NULL AND locked_until <= now() THEN NULL
+                  WHEN failed_logins + 1 >= $2 THEN now() + make_interval(mins => $3)
+                  ELSE locked_until END
           WHERE id = $1`,
         [user.id, MAX_FAILED, LOCK_MINUTES],
       );
