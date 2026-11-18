@@ -79,6 +79,11 @@ const createSchema = z.object({
   to_facility_id: z.uuid(),
   recipient_id: z.uuid(),
   reason: z.string().trim().max(300).optional(),
+  // Inventory/management returning trays to a warehouse themselves: record the
+  // receipt in the same step instead of making them receive their own transfer.
+  receive_now: z.boolean().optional(),
+  // Trays whose label was scanned while building the list (recorded on the receipt).
+  scanned_asset_ids: z.array(z.uuid()).max(100).optional(),
 }).refine((b) => b.asset_id || b.asset_ids, { message: 'Choose at least one asset.', path: ['asset_ids'] });
 
 /**
@@ -94,6 +99,12 @@ router.post('/', async (req, res) => {
     if (!fac) throw badRequest('Choose an active destination facility.');
     const { rows: [rcpt] } = await c.query(`SELECT id, full_name FROM users WHERE id = $1 AND active AND role <> 'system'`, [b.recipient_id]);
     if (!rcpt) throw badRequest('Choose an active receiving representative.');
+    if (b.receive_now) {
+      if (!can.viewAll(req.user)) throw forbidden('Only inventory, management and administrators can complete a return in one step.');
+      if (fac.facility_type !== 'warehouse') throw badRequest('One-step receipt is only for returns to a warehouse.');
+      if (rcpt.id !== req.user.id) throw badRequest('One-step receipt is only when you are the one returning the trays.');
+    }
+    const scanned = new Set(b.scanned_asset_ids || []);
 
     // Validate every asset first; report all problems at once.
     const scope = assetScope(req.user, 2);
@@ -143,6 +154,26 @@ router.post('/', async (req, res) => {
         from_status: a.status, to_status: 'in_transit', transfer_id: t.id,
         details: { transfer_no: t.transfer_no, reason: b.reason || null, ...(batch ? { shipment_no: batch.batch_no, shipment_size: assets.length } : {}) },
       });
+      if (b.receive_now) {
+        const viaScan = scanned.has(a.id);
+        const note = `Returned to the warehouse by ${req.user.full_name}; received in the same step${viaScan ? ' (label scanned)' : ''}.`;
+        const newStatus = statusFor(fac.facility_type);
+        await c.query(
+          `UPDATE transfers SET status = 'received', received_at = now(), received_by = $2, received_facility_id = $3 WHERE id = $1`,
+          [t.id, req.user.id, fac.id]);
+        await c.query(
+          `INSERT INTO transfer_confirmations (transfer_id, confirmed_by, facility_id, via_qr_scan, notes) VALUES ($1,$2,$3,$4,$5)`,
+          [t.id, req.user.id, fac.id, viaScan, note]);
+        await c.query(
+          `UPDATE assets SET status = $2, current_facility_id = $3, custodian_id = $4, last_transferred_at = now(),
+                  last_scanned_at = CASE WHEN $5 THEN now() ELSE last_scanned_at END, version = version + 1
+            WHERE id = $1`, [a.id, newStatus, fac.id, req.user.id, viaScan]);
+        await event(c, a.id, 'transfer_received', req.user.id, {
+          from_facility_id: a.current_facility_id, to_facility_id: fac.id, from_custodian_id: a.custodian_id, to_custodian_id: req.user.id,
+          from_status: 'in_transit', to_status: newStatus, transfer_id: t.id,
+          details: { transfer_no: t.transfer_no, via_qr_scan: viaScan, one_step_return: true, note },
+        });
+      }
       out.push({ ...t, asset: a });
     }
     if (rcpt.id !== req.user.id) {

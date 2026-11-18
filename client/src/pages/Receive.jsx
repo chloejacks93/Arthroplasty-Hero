@@ -6,6 +6,7 @@ import { useApi, useMeta, refreshMeta } from '../lib/useApi.js';
 import { QrScanner } from '../components/QrScanner.jsx';
 import { Modal } from '../components/Modal.jsx';
 import { FACILITY_TYPE, relTime } from '../lib/format.js';
+import * as beep from '../lib/beep.js';
 
 /**
  * Receive trays sent to you. Scanning a tray that's coming to you confirms it
@@ -33,7 +34,10 @@ export default function Receive() {
     return [...m.values()];
   }, [items]);
 
-  const say = (tone, text) => setFlash({ tone, text, at: Date.now() });
+  const say = (tone, text, sound = true) => {
+    setFlash({ tone, text, at: Date.now() });
+    if (sound) { if (tone === 'green') beep.ok(); else beep.error(); }
+  };
   const elsewhere = !!where;
 
   const onScan = useCallback(async (value) => {
@@ -59,7 +63,7 @@ export default function Receive() {
     }
   }, [items, where, note, elsewhere, reload]);
 
-  const finish = (text) => { setConfirm(null); setMissing(null); say('green', text); reload(); refreshMeta(); };
+  const finish = (text) => { setConfirm(null); setMissing(null); say('green', text, false); reload(); refreshMeta(); };
 
   return (
     <div className="flow-page">

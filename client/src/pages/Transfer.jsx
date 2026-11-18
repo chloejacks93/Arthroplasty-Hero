@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth.jsx';
 import { QrScanner } from '../components/QrScanner.jsx';
 import { StatusBadge } from '../components/StatusBadge.jsx';
 import { FACILITY_TYPE } from '../lib/format.js';
+import * as beep from '../lib/beep.js';
 
 const REASONS = ['Case coverage', 'Return to warehouse', 'Rebalancing inventory', 'Requested by another rep'];
 const TYPE_ORDER = ['warehouse', 'hospital', 'surgery_center', 'clinic', 'other'];
@@ -28,18 +29,22 @@ export default function Transfer() {
   const [facility, setFacility] = useState('');
   const [recipient, setRecipient] = useState('');
   const [reason, setReason] = useState('');
+  const [receiveNow, setReceiveNow] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [done, setDone] = useState(null);
   const itemsRef = useRef(items);
   itemsRef.current = items;
 
-  const say = (tone, text) => setFlash({ tone, text, at: Date.now() });
+  const say = (tone, text) => {
+    setFlash({ tone, text, at: Date.now() });
+    if (tone === 'green') beep.ok(); else beep.error();
+  };
 
-  const add = useCallback((a) => {
+  const add = useCallback((a, via = 'search') => {
     if (itemsRef.current.some((x) => x.id === a.id)) return say('amber', `${a.reference} is already in the list.`);
     if (itemsRef.current.length >= MAX_TRAYS) return say('amber', `Up to ${MAX_TRAYS} trays per transfer.`);
-    setItems((cur) => [...cur, { ...a, problem: null }]);
+    setItems((cur) => [...cur, { ...a, problem: null, via }]);
     say('green', `Added ${a.reference}`);
     setErr('');
   }, []);
@@ -61,7 +66,7 @@ export default function Transfer() {
       if (r.status === 'unknown') return say('amber', 'That label isn’t linked to an asset yet. Use Search to add the tray.');
       if (!r.asset.in_scope) return say('red', `${r.asset.reference} belongs to another team (${r.asset.team_name || 'unassigned'}). It can’t be sent from here.`);
       if (r.openTransfer) return say('red', `${r.asset.reference} is already in transit to ${r.openTransfer.recipient_name}.`);
-      add(r.asset);
+      add(r.asset, 'scan');
     } catch (e) {
       say('red', e.message);
     }
@@ -77,12 +82,17 @@ export default function Transfer() {
     return { reps: u.filter((x) => x.role === 'rep'), others: u.filter((x) => x.role !== 'rep') };
   }, [meta, user.id]);
 
+  const destFacility = (meta?.facilities || []).find((f) => f.id === facility);
+  // Inventory / management returning trays to a warehouse themselves: no separate receive step.
+  const oneStep = !!meta?.permissions.investigate && destFacility?.facility_type === 'warehouse' && receiveNow;
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true); setErr('');
     try {
       const r = await api.post('/transfers', {
-        asset_ids: items.map((a) => a.id), to_facility_id: facility, recipient_id: recipient, reason: reason.trim() || undefined,
+        asset_ids: items.map((a) => a.id), to_facility_id: facility,
+        recipient_id: oneStep ? user.id : recipient, reason: reason.trim() || undefined,
+        ...(oneStep ? { receive_now: true, scanned_asset_ids: items.filter((a) => a.via === 'scan').map((a) => a.id) } : {}),
       });
       setDone(r);
       setItems([]);
@@ -104,10 +114,19 @@ export default function Transfer() {
         <section className="panel flow-panel">
           <div className="done-state">
             <CheckCircle2 aria-hidden />
-            <strong>{t.length === 1 ? `${t[0].reference} is in transit` : `${t.length} trays are in transit`}</strong>
-            <span>To <b>{t[0].to_facility}</b>{done.shipment ? ` · shipment S-${done.shipment.batch_no}` : ''}. {toMe
-              ? 'Scan each tray when you arrive to confirm receipt.'
-              : <>{t[0].recipient_name} has been notified and must scan {t.length === 1 ? 'it' : 'each tray'} to confirm receipt.</>}</span>
+            {t[0].status === 'received' ? (
+              <>
+                <strong>{t.length === 1 ? `${t[0].reference} is back at ${t[0].to_facility}` : `${t.length} trays are back at ${t[0].to_facility}`}</strong>
+                <span>Returned and received in one step{done.shipment ? ` · shipment S-${done.shipment.batch_no}` : ''}. Nothing left to receive.</span>
+              </>
+            ) : (
+              <>
+                <strong>{t.length === 1 ? `${t[0].reference} is in transit` : `${t.length} trays are in transit`}</strong>
+                <span>To <b>{t[0].to_facility}</b>{done.shipment ? ` · shipment S-${done.shipment.batch_no}` : ''}. {toMe
+                  ? 'Scan each tray when you arrive to confirm receipt.'
+                  : <>{t[0].recipient_name} has been notified and must scan {t.length === 1 ? 'it' : 'each tray'} to confirm receipt.</>}</span>
+              </>
+            )}
             {t.length > 1 && <ul className="done-list">{t.map((x) => <li key={x.id}>{x.reference}</li>)}</ul>}
             <div className="seg" style={{ justifyContent: 'center' }}>
               <button className="btn btn-lg" onClick={() => navigate('/')}>Done</button>
@@ -177,7 +196,16 @@ export default function Transfer() {
                   ))}
                 </select>
               </div>
-              <div className="field">
+              {meta?.permissions.investigate && destFacility?.facility_type === 'warehouse' && (
+                <label className={`one-step${receiveNow ? ' on' : ''}`}>
+                  <input type="checkbox" className="check" checked={receiveNow} onChange={(e) => setReceiveNow(e.target.checked)} />
+                  <span>
+                    <strong>Mark received at {destFacility.name} now</strong>
+                    <small>I’m returning {items.length > 1 ? 'these trays' : 'this tray'} to the warehouse myself, so there’s no separate receive step.</small>
+                  </span>
+                </label>
+              )}
+              {!oneStep && <div className="field">
                 <label htmlFor="rcpt">Receiving representative</label>
                 <select id="rcpt" className="select select-lg" value={recipient} onChange={(e) => setRecipient(e.target.value)} required>
                   <option value="" disabled>Who will receive {items.length > 1 ? 'them' : 'it'}?</option>
@@ -185,7 +213,7 @@ export default function Transfer() {
                   <optgroup label="Representatives">{people.reps.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}</optgroup>
                   {people.others.length > 0 && <optgroup label="Inventory & management">{people.others.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}</optgroup>}
                 </select>
-              </div>
+              </div>}
               <div className="field">
                 <label htmlFor="why">Reason <span className="subtle">(optional)</span></label>
                 <div className="chips">
@@ -194,8 +222,10 @@ export default function Transfer() {
                 <input id="why" className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Or type a reason" maxLength={300} />
               </div>
               {err && <div className="form-error" role="alert">{err}</div>}
-              <button className="btn btn-primary btn-lg btn-block" disabled={busy || !facility || !recipient || items.some((a) => a.problem)}>
-                <ArrowLeftRight aria-hidden /> {busy ? 'Starting…' : items.length === 1 ? 'Start transfer' : `Start transfer of ${items.length} trays`}
+              <button className="btn btn-primary btn-lg btn-block" disabled={busy || !facility || (!oneStep && !recipient) || items.some((a) => a.problem)}>
+                <ArrowLeftRight aria-hidden /> {busy ? 'Saving…'
+                  : oneStep ? (items.length === 1 ? 'Return to warehouse' : `Return ${items.length} trays to warehouse`)
+                    : items.length === 1 ? 'Start transfer' : `Start transfer of ${items.length} trays`}
               </button>
             </form>
           )}

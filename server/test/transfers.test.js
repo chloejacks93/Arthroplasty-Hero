@@ -205,3 +205,31 @@ test('multi-tray shipment: one action, one notification, all-or-nothing, receive
   // Duplicate ids are de-duplicated; empty list rejected.
   assert.equal((await post(A, '/api/transfers', { asset_ids: [], to_facility_id: h2, recipient_id: repB })).status, 400);
 });
+
+test('one-step warehouse return: inventory/management returning trays themselves need not receive them again', async () => {
+  const north = (await one(`SELECT id FROM teams WHERE name = 'North'`)).id;
+  const ids = [];
+  for (const ref of ['RET 1', 'RET 2']) {
+    ids.push((await one(
+      `INSERT INTO assets (reference, team_id, current_facility_id, status, custodian_id) VALUES ($1, $2, $3, 'at_facility', $4) RETURNING id`,
+      [ref, north, h1, repA])).id);
+  }
+  // Reps can't; destination must be a warehouse; recipient must be the sender.
+  assert.equal((await post(A, '/api/transfers', { asset_ids: ids, to_facility_id: wh, recipient_id: repA, receive_now: true })).status, 403);
+  assert.equal((await post(M, '/api/transfers', { asset_ids: ids, to_facility_id: h2, recipient_id: mgr, receive_now: true })).status, 400);
+  assert.equal((await post(M, '/api/transfers', { asset_ids: ids, to_facility_id: wh, recipient_id: repA, receive_now: true })).status, 400);
+  assert.equal((await one(`SELECT count(*)::int AS n FROM transfers WHERE asset_id = ANY($1)`, [ids])).n, 0);
+
+  const r = await post(M, '/api/transfers', { asset_ids: ids, to_facility_id: wh, recipient_id: mgr, receive_now: true, scanned_asset_ids: [ids[0]] });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.ok(r.body.transfers.every((t) => t.status === 'received' && t.received_facility === 'Main Warehouse'));
+  const assets = (await pool.query(`SELECT status, current_facility_id, custodian_id FROM assets WHERE id = ANY($1)`, [ids])).rows;
+  assert.ok(assets.every((a) => a.status === 'at_warehouse' && a.current_facility_id === wh && a.custodian_id === mgr));
+  const conf = (await pool.query(`SELECT c.via_qr_scan, c.notes FROM transfer_confirmations c JOIN transfers t ON t.id = c.transfer_id WHERE t.asset_id = ANY($1) ORDER BY t.transfer_no`, [ids])).rows;
+  assert.deepEqual(conf.map((c) => c.via_qr_scan), [true, false]);
+  assert.match(conf[0].notes, /received in the same step/);
+  const ev = (await pool.query(`SELECT event_type, details FROM asset_events WHERE asset_id = $1 ORDER BY id`, [ids[0]])).rows;
+  assert.deepEqual(ev.map((e) => e.event_type), ['transfer_initiated', 'transfer_received']);
+  assert.equal(ev[1].details.one_step_return, true);
+  assert.equal((await M.get('/api/transfers?box=incoming')).body.items.length, 0, 'nothing left to receive');
+});

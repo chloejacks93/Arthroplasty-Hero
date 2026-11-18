@@ -8,6 +8,7 @@ import { useMeta, refreshMeta } from '../lib/useApi.js';
 import { QrScanner } from '../components/QrScanner.jsx';
 import { StatusBadge } from '../components/StatusBadge.jsx';
 import { ConfirmModal } from './Receive.jsx';
+import * as beep from '../lib/beep.js';
 import { ASSET_TYPE, relTime, fmtDateTime } from '../lib/format.js';
 
 export default function Scan() {
@@ -32,9 +33,11 @@ export default function Scan() {
     setError('');
     try {
       const r = await api.post('/qr/scan', { value, source });
+      if (r.status === 'matched') beep.ok(); else beep.error();
       setResult(r);
       setPhase('result');
     } catch (e) {
+      beep.error();
       setError(e.message);
       setPhase('result');
       setResult(null);

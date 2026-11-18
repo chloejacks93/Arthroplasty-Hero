@@ -3,6 +3,7 @@ import { ScanLine, Search, ArrowRight, AlertTriangle } from 'lucide-react';
 import { api, qs } from '../lib/api.js';
 import { QrScanner } from './QrScanner.jsx';
 import { StatusBadge } from './StatusBadge.jsx';
+import * as beep from '../lib/beep.js';
 
 /**
  * Choose an asset by scanning its existing QR label (default) or searching.
@@ -25,10 +26,13 @@ export function AssetPicker({ onPick, allowOutOfScope = false, hint }) {
       } else if (!r.asset.in_scope && !allowOutOfScope) {
         setMsg(`${r.asset.reference} belongs to another team (${r.asset.team_name || 'unassigned'}). Use “Report a problem” if you have it.`);
       } else {
+        beep.ok();
         onPick(r.asset, { scan: r });
         return;
       }
+      beep.error();
     } catch (e) {
+      beep.error();
       setMsg(e.message);
     } finally {
       setBusy(false);
