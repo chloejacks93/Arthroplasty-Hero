@@ -117,6 +117,50 @@ router.get('/', async (req, res) => {
   });
 });
 
+// ---------------------------------------------------------------------
+// Trays still without a linked Arthrex QR label, with overall progress.
+// Scoped to what the user may see. Lightweight rows, grouped client-side.
+// ---------------------------------------------------------------------
+router.get('/unlinked', async (req, res) => {
+  const f = parse(z.object({
+    q: z.string().trim().max(200).optional(),
+    team_id: z.uuid().optional(),
+    facility_id: z.uuid().optional(),
+  }), req.query);
+  const scope = assetScope(req.user, 1);
+  const base = `a.retired_at IS NULL AND ${scope.sql}`;
+  const params = [...scope.params];
+  const where = [base, 'NOT EXISTS (SELECT 1 FROM asset_qr_codes q WHERE q.asset_id = a.id AND q.active)'];
+  const add = (sql, v) => { params.push(v); where.push(sql.replaceAll('?', `$${params.length}`)); };
+  if (f.team_id) add('a.team_id = ?', f.team_id);
+  if (f.facility_id) add('a.current_facility_id = ?', f.facility_id);
+  if (f.q) add('(a.reference ILIKE ? OR a.description ILIKE ? OR a.lot ILIKE ?)', `%${f.q.replace(/[%_\\]/g, '\\$&')}%`);
+  const [summary, rows] = await Promise.all([
+    query(
+      `SELECT count(*)::int AS total,
+              count(*) FILTER (WHERE EXISTS (SELECT 1 FROM asset_qr_codes q WHERE q.asset_id = a.id AND q.active))::int AS linked
+         FROM assets a WHERE ${base}`, scope.params),
+    query(
+      `SELECT a.id, a.asset_no, a.reference, a.description, a.asset_type, a.status, a.lot, a.last_scanned_at,
+              a.current_facility_id, f.name AS facility_name, f.facility_type,
+              tm.name AS team_name, r.full_name AS rep_name, c.full_name AS custodian_name
+         FROM assets a
+         LEFT JOIN facilities f ON f.id = a.current_facility_id
+         LEFT JOIN teams tm ON tm.id = a.team_id
+         LEFT JOIN users r ON r.id = a.assigned_rep_id
+         LEFT JOIN users c ON c.id = a.custodian_id
+        WHERE ${where.join(' AND ')}
+        ORDER BY (f.facility_type = 'warehouse') DESC NULLS LAST, upper(f.name) NULLS LAST, upper(a.reference)
+        LIMIT 2000`, params),
+  ]);
+  const s = summary.rows[0];
+  res.json({
+    summary: { total: s.total, linked: s.linked, unlinked: s.total - s.linked },
+    items: rows.rows.map((r) => ({ ...r, asset_code: assetCode(r.asset_no) })),
+    truncated: rows.rows.length === 2000,
+  });
+});
+
 router.get('/:id', async (req, res) => {
   const id = parse(z.uuid(), req.params.id);
   const scope = assetScope(req.user, 2);

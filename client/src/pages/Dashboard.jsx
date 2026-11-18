@@ -167,7 +167,7 @@ export default function Dashboard() {
             <div className="panel-head"><h2>Data quality</h2></div>
             <dl className="facts tight" style={{ gridTemplateColumns: '1fr', margin: 0 }}>
               <div className="fact" style={{ borderRight: 0 }}>
-                <dt>Assets without a linked QR code</dt>
+                <dt>Assets without a linked QR code · <Link to="/unlinked">See the list</Link></dt>
                 <dd className="num">{v(k?.unlinked_qr)}{k && k.total > 0 && <span className="subtle"> · {Math.round((k.unlinked_qr / k.total) * 100)}% of registry</span>}</dd>
               </div>
               <div className="fact" style={{ borderRight: 0, borderBottom: 0 }}>

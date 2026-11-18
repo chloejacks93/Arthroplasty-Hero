@@ -18,6 +18,7 @@ function buildNav(meta) {
         { to: '/receive', label: 'Receive', icon: PackageCheck, count: meta?.counts.incomingTransfers },
         { to: '/transfers', label: 'Transfers', icon: ArrowLeftRight },
         { to: '/assets', label: 'Asset Registry', icon: Boxes },
+        { to: '/unlinked', label: 'Missing QR', icon: QrCode, count: meta?.counts.unlinkedAssets, tone: 'muted' },
         { to: '/investigations', label: 'Investigations', icon: ShieldAlert, count: meta?.permissions.investigate ? meta?.counts.openInvestigations : 0 },
       ],
     },

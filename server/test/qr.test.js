@@ -148,3 +148,21 @@ test('registry filter: assets with and without a linked QR', async () => {
   assert.equal(meta.body.permissions.linkQr, true);
   assert.equal(typeof meta.body.counts.pendingQrRequests, 'number');
 });
+
+test('unlinked list: progress, scoping, filters', async () => {
+  const all = await inv.get('/api/assets/unlinked');
+  assert.equal(all.status, 200);
+  const { summary, items } = all.body;
+  assert.equal(summary.total, summary.linked + summary.unlinked);
+  assert.equal(items.length, summary.unlinked);
+  assert.ok(items.every((a) => a.asset_code && a.reference));
+  const linkedIds = (await pool.query('SELECT asset_id FROM asset_qr_codes WHERE active')).rows.map((r) => r.asset_id);
+  assert.ok(items.every((a) => !linkedIds.includes(a.id)), 'only assets without an active label');
+  // Reps only see their scope
+  const repView = await rep.get('/api/assets/unlinked');
+  assert.ok(repView.body.items.every((a) => a.team_name === 'North' || a.team_name === null));
+  assert.ok(repView.body.summary.total <= summary.total);
+  // Search filter
+  const q = await inv.get('/api/assets/unlinked?q=tray%20b');
+  assert.ok(q.body.items.every((a) => /tray b/i.test(a.reference)));
+});

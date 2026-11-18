@@ -14,6 +14,7 @@ import { ASSET_TYPE, relTime, fmtDateTime } from '../lib/format.js';
 export default function Scan() {
   const [params, setParams] = useSearchParams();
   const linkTarget = params.get('link'); // link mode: attach the next scanned code to this asset
+  const backTo = params.get('back') === 'unlinked' ? '/unlinked' : null;
   const meta = useMeta();
   const navigate = useNavigate();
   const [phase, setPhase] = useState('scanning'); // scanning | loading | result
@@ -58,7 +59,9 @@ export default function Scan() {
             ? <>Scan the existing Arthrex label on <strong>{target ? `${target.asset_code} · ${target.reference}` : 'this asset'}</strong>.</>
             : 'Scan the existing Arthrex QR label on any tray or tote.'}</p>
         </div>
-        {linkTarget && <button className="btn" onClick={() => { setParams({}); again(); }}><X aria-hidden /> Exit link mode</button>}
+        {linkTarget && (backTo
+          ? <Link className="btn" to={backTo}><X aria-hidden /> Back to Missing QR list</Link>
+          : <button className="btn" onClick={() => { setParams({}); again(); }}><X aria-hidden /> Exit link mode</button>)}
       </div>
 
       <div className={`scan-layout${phase !== 'scanning' ? ' has-result' : ''}`}>
@@ -99,7 +102,7 @@ export default function Scan() {
               onReceived={() => refreshMeta()} />
           )}
           {phase === 'result' && result?.status === 'unknown' && (
-            <UnknownCard r={result} canLink={!!meta?.permissions.linkQr} linkTarget={target}
+            <UnknownCard r={result} canLink={!!meta?.permissions.linkQr} linkTarget={target} backTo={backTo}
               onDone={() => { refreshMeta(); }} onAgain={again} />
           )}
         </section>
@@ -179,7 +182,7 @@ function MatchedCard({ r, linkTarget, target, onAgain, onOpen, onReceived, facil
   );
 }
 
-function UnknownCard({ r, canLink, linkTarget, onDone, onAgain }) {
+function UnknownCard({ r, canLink, linkTarget, backTo, onDone, onAgain }) {
   const [q, setQ] = useState('');
   const [includeLinked, setIncludeLinked] = useState(false);
   const [items, setItems] = useState(null);
@@ -224,8 +227,14 @@ function UnknownCard({ r, canLink, linkTarget, onDone, onAgain }) {
             ? <>{chosen.asset_code} · {chosen.reference} will now open whenever this label is scanned.</>
             : 'An inventory lead will confirm the match. Until then this code stays unlinked.'}</span>
           <div className="seg" style={{ justifyContent: 'center' }}>
-            {done === 'linked' && <Link className="btn btn-lg" to={`/assets/${chosen.id}`}>Open asset</Link>}
-            <button className="btn btn-primary btn-lg" onClick={onAgain}><ScanLine aria-hidden /> Scan next</button>
+            {backTo ? (
+              <Link className="btn btn-primary btn-lg" to={backTo}>Next tray on the list</Link>
+            ) : (
+              <>
+                {done === 'linked' && <Link className="btn btn-lg" to={`/assets/${chosen.id}`}>Open asset</Link>}
+                <button className="btn btn-primary btn-lg" onClick={onAgain}><ScanLine aria-hidden /> Scan next</button>
+              </>
+            )}
           </div>
         </div>
       </div>

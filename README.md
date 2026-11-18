@@ -178,6 +178,8 @@ The source data showed that a catalog + serial identifies an **instrument set, n
 - Replacing or unlinking a code requires a reason. The old link is kept, inactive, in permanent history (`qr_linked` / `qr_unlinked` events).
 - **Scan to link** on an asset page walks an inventory lead through linking that specific asset. Registry filter **QR linked / No QR yet** shows what's left to link.
 
+**Missing QR** (sidebar, with a count): every tray still without a linked label, grouped by current location (warehouses first) with per-location counts. It shows overall progress (*7 of 113 trays linked, 6%*), search, location and team filters, and **Export list** to Excel. **Scan to link** on a tray opens the camera in link mode, then *Next tray on the list* returns you to the shrinking list. Reps see their own scope and send link requests; inventory, management and admins link directly. The dashboard's *without a linked QR code* figure links here.
+
 **Representative home:** large *Scan asset*, *Find a tray* and *My assets* tiles above their scoped figures. *Transfer*, *Receive* and *Report a problem* arrive with Phase 4, when those workflows exist.
 
 **Tested**

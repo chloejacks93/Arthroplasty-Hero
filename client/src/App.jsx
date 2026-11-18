@@ -20,6 +20,7 @@ import Facilities, { FacilityDetail } from './pages/Facilities.jsx';
 import Teams from './pages/Teams.jsx';
 import People from './pages/People.jsx';
 import Account, { ForcePasswordChange } from './pages/Account.jsx';
+import Unlinked from './pages/Unlinked.jsx';
 
 export default function App() {
   const { user } = useAuth();
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="teams" element={<Teams />} />
         <Route path="people" element={<People />} />
         <Route path="account" element={<Account />} />
+        <Route path="unlinked" element={<Unlinked />} />
         <Route path="*" element={<div className="empty"><strong>Page not found</strong><Link to="/">Return to dashboard</Link></div>} />
       </Route>
     </Routes>
