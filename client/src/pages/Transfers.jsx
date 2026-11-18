@@ -60,7 +60,7 @@ export default function Transfers() {
           empty={{ title: 'No transfers', body: status === 'overdue' ? 'Nothing is past its receipt deadline.' : 'Nothing matches these filters.' }}
           columns={[
             { key: 'asset', header: 'Asset', mobile: 'primary', render: (t) => (
-              <span className="stacked"><Link to={`/assets/${t.asset_id}`} className="cell-primary">{t.reference}</Link><span className="cell-sub mono">T-{t.transfer_no} · {t.asset_code}</span></span>
+              <span className="stacked"><Link to={`/assets/${t.asset_id}`} className="cell-primary">{t.reference}</Link><span className="cell-sub mono">T-{t.transfer_no} · {t.asset_code}{t.batch_no ? ` · S-${t.batch_no} (${t.batch_size} trays)` : ''}</span></span>
             ) },
             { key: 'status', header: 'Status', mobile: 'status', render: (t) => (
               <span className="stacked">

@@ -13,7 +13,10 @@ const MAX_DECODE_WIDTH = 720;
  *  - Stops the camera when paused or unmounted.
  * Props: onResult(text), paused (bool)
  */
-export function QrScanner({ onResult, paused }) {
+export function QrScanner({ onResult, paused, continuous = false }) {
+  // continuous: keep scanning after each read (multi-tray mode).
+  const continuousRef = useRef(continuous);
+  continuousRef.current = continuous;
   const video = useRef(null);
   const canvas = useRef(null);
   const stream = useRef(null);
@@ -54,6 +57,10 @@ export function QrScanner({ onResult, paused }) {
           setTimeout(() => setHit(false), 450);
           if (navigator.vibrate) navigator.vibrate(40);
           onResultRef.current(text);
+          if (continuousRef.current) {
+            timer.current = setTimeout(tick, 900); // brief pause so the same label isn't re-read at once
+            return;
+          }
           return; // parent pauses us; do not schedule another tick
         }
       }
@@ -127,7 +134,7 @@ export function QrScanner({ onResult, paused }) {
       )}
       <div className="scanner-status" role="status" aria-live="polite">
         {state === 'starting' && 'Starting camera…'}
-        {state === 'live' && 'Point the camera at the asset’s QR label'}
+        {state === 'live' && (continuous ? 'Scan each tray. Keep going.' : 'Point the camera at the asset’s QR label')}
         {state === 'paused' && 'Scan captured'}
       </div>
       {state === 'error' && (

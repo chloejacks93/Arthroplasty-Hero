@@ -164,3 +164,44 @@ test('report a problem: anyone can report; status follows the kind; only managem
   assert.equal((await post(M, `/api/investigations/${m.body.id}/update`, { action: 'resolve', note: 'again' })).status, 409);
   await assert.rejects(pool.query('DELETE FROM investigation_events'), /permanent/);
 });
+
+test('multi-tray shipment: one action, one notification, all-or-nothing, received tray by tray', async () => {
+  const north = (await one(`SELECT id FROM teams WHERE name = 'North'`)).id;
+  const ids = [];
+  for (const ref of ['SHIP A', 'SHIP B', 'SHIP C']) {
+    ids.push((await one(
+      `INSERT INTO assets (reference, team_id, current_facility_id, status) VALUES ($1, $2, $3, 'at_warehouse') RETURNING id`,
+      [ref, north, wh])).id);
+  }
+  await pool.query(`INSERT INTO asset_qr_codes (asset_id, qr_value, linked_by) VALUES ($1, 'qr-ship-a', $2)`, [ids[0], SYSTEM]);
+
+  // One bad asset (another team's) blocks the whole shipment and is named.
+  const bad = await post(A, '/api/transfers', { asset_ids: [...ids, SOUTH.id], to_facility_id: h2, recipient_id: repB });
+  assert.equal(bad.status, 409);
+  assert.match(bad.body.error, /1 of 4 assets can’t be sent/);
+  assert.equal(bad.body.details.problems[0].reference, 'SOUTH TOTE');
+  assert.equal((await one(`SELECT count(*)::int AS n FROM transfers WHERE asset_id = ANY($1)`, [ids])).n, 0, 'nothing started');
+
+  const before = (await one(`SELECT count(*)::int AS n FROM notifications WHERE user_id = $1`, [repB])).n;
+  const r = await post(A, '/api/transfers', { asset_ids: ids, to_facility_id: h2, recipient_id: repB, reason: 'Case coverage' });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.transfers.length, 3);
+  assert.ok(r.body.shipment.batch_no);
+  assert.ok(r.body.transfers.every((t) => t.batch_no === r.body.shipment.batch_no && t.batch_size === 3));
+  const notes = await pool.query(`SELECT title FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5`, [repB]);
+  assert.equal((await one(`SELECT count(*)::int AS n FROM notifications WHERE user_id = $1`, [repB])).n - before, 1, 'one notification for the shipment');
+  assert.match(notes.rows[0].title, /3 trays/);
+  assert.equal((await one(`SELECT count(*)::int AS n FROM assets WHERE id = ANY($1) AND status = 'in_transit'`, [ids])).n, 3);
+
+  // Each tray is confirmed on its own (label required where linked).
+  const tA = r.body.transfers.find((t) => t.asset_id === ids[0]);
+  const tB = r.body.transfers.find((t) => t.asset_id === ids[1]);
+  assert.equal((await post(B, `/api/transfers/${tA.id}/receive`, {})).status, 400, 'label still required');
+  assert.equal((await post(B, `/api/transfers/${tA.id}/receive`, { qr_value: 'qr-ship-a' })).status, 200);
+  assert.equal((await post(B, `/api/transfers/${tB.id}/receive`, {})).status, 200, 'no label linked -> allowed');
+  const inbox = await B.get('/api/transfers?box=incoming');
+  const left = inbox.body.items.filter((t) => t.batch_no === r.body.shipment.batch_no);
+  assert.equal(left.length, 1, 'one tray of the shipment still incoming');
+  // Duplicate ids are de-duplicated; empty list rejected.
+  assert.equal((await post(A, '/api/transfers', { asset_ids: [], to_facility_id: h2, recipient_id: repB })).status, 400);
+});

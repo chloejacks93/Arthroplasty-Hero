@@ -21,7 +21,8 @@ const TRANSFER_SELECT = `
          t.received_facility_id, rf.name AS received_facility,
          t.sender_id, s.full_name AS sender_name, t.recipient_id, rc.full_name AS recipient_name,
          rb.full_name AS received_by_name, cb.full_name AS closed_by_name,
-         tc.via_qr_scan, tc.notes AS receipt_note
+         tc.via_qr_scan, tc.notes AS receipt_note,
+         t.batch_id, tb.batch_no, tb.asset_count AS batch_size
     FROM transfers t
     JOIN assets a ON a.id = t.asset_id
     LEFT JOIN facilities ff ON ff.id = t.from_facility_id
@@ -31,7 +32,8 @@ const TRANSFER_SELECT = `
     JOIN users rc ON rc.id = t.recipient_id
     LEFT JOIN users rb ON rb.id = t.received_by
     LEFT JOIN users cb ON cb.id = t.closed_by
-    LEFT JOIN transfer_confirmations tc ON tc.transfer_id = t.id`;
+    LEFT JOIN transfer_confirmations tc ON tc.transfer_id = t.id
+    LEFT JOIN transfer_batches tb ON tb.id = t.batch_id`;
 
 const tag = (r) => ({ ...r, asset_code: assetCode(r.asset_no) });
 
@@ -72,53 +74,94 @@ router.get('/', async (req, res) => {
 // Initiate
 // ---------------------------------------------------------------------
 const createSchema = z.object({
-  asset_id: z.uuid(),
+  asset_id: z.uuid().optional(),
+  asset_ids: z.array(z.uuid()).min(1).max(100).optional(),
   to_facility_id: z.uuid(),
   recipient_id: z.uuid(),
   reason: z.string().trim().max(300).optional(),
-});
+}).refine((b) => b.asset_id || b.asset_ids, { message: 'Choose at least one asset.', path: ['asset_ids'] });
 
+/**
+ * Start transfers for one or more assets in ONE transaction (all or nothing).
+ * Several assets are grouped into a shipment (transfer_batches) but each keeps
+ * its own transfer, receipt and history. The recipient gets one notification.
+ */
 router.post('/', async (req, res) => {
   const b = parse(createSchema, req.body);
-  const transfer = await tx(async (c) => {
-    const scope = assetScope(req.user, 2);
-    const { rows: [a] } = await c.query(
-      `SELECT a.*, coalesce((${scope.sql}), false) AS in_scope FROM assets a WHERE a.id = $1 AND a.retired_at IS NULL FOR UPDATE`,
-      [b.asset_id, ...scope.params]);
-    if (!a) throw notFound('Asset not found.');
-    if (!a.in_scope) throw forbidden('This asset belongs to another team. Report it with “Report a problem” if you have it.');
-    const { rows: [open] } = await c.query(
-      `SELECT t.transfer_no, u.full_name FROM transfers t JOIN users u ON u.id = t.recipient_id WHERE t.asset_id = $1 AND t.status = 'in_transit'`, [a.id]);
-    if (open) throw conflict(`This asset is already in transit to ${open.full_name} (T-${open.transfer_no}). It must be received or cancelled first.`);
+  const ids = [...new Set(b.asset_ids || [b.asset_id])];
+  const created = await tx(async (c) => {
     const { rows: [fac] } = await c.query('SELECT id, name, facility_type FROM facilities WHERE id = $1 AND active', [b.to_facility_id]);
     if (!fac) throw badRequest('Choose an active destination facility.');
     const { rows: [rcpt] } = await c.query(`SELECT id, full_name FROM users WHERE id = $1 AND active AND role <> 'system'`, [b.recipient_id]);
     if (!rcpt) throw badRequest('Choose an active receiving representative.');
-    if (fac.id === a.current_facility_id && rcpt.id === (a.custodian_id || a.assigned_rep_id) && a.status !== 'missing') {
-      throw badRequest('The asset is already at this facility with this person.');
+
+    // Validate every asset first; report all problems at once.
+    const scope = assetScope(req.user, 2);
+    const assets = [];
+    const problems = [];
+    for (const id of ids) {
+      const { rows: [a] } = await c.query(
+        `SELECT a.*, coalesce((${scope.sql}), false) AS in_scope FROM assets a WHERE a.id = $1 AND a.retired_at IS NULL FOR UPDATE`,
+        [id, ...scope.params]);
+      if (!a) { problems.push({ asset_id: id, reason: 'Asset not found.' }); continue; }
+      const label = `${assetCode(a.asset_no)} · ${a.reference}`;
+      if (!a.in_scope) { problems.push({ asset_id: id, reference: a.reference, reason: `${label} belongs to another team. Report it with “Report a problem” if you have it.` }); continue; }
+      const { rows: [open] } = await c.query(
+        `SELECT t.transfer_no, u.full_name FROM transfers t JOIN users u ON u.id = t.recipient_id WHERE t.asset_id = $1 AND t.status = 'in_transit'`, [a.id]);
+      if (open) { problems.push({ asset_id: id, reference: a.reference, reason: `${label} is already in transit to ${open.full_name} (T-${open.transfer_no}). It must be received or cancelled first.` }); continue; }
+      if (fac.id === a.current_facility_id && rcpt.id === (a.custodian_id || a.assigned_rep_id) && a.status !== 'missing') {
+        problems.push({ asset_id: id, reference: a.reference, reason: `${label} is already at ${fac.name} with ${rcpt.full_name}.` });
+        continue;
+      }
+      assets.push(a);
+    }
+    if (problems.length) {
+      const msg = problems.length === 1 && ids.length === 1
+        ? problems[0].reason.replace(/^AH-\d+ · .*? (belongs|is already)/, 'This asset $1')
+        : `${problems.length} of ${ids.length} assets can’t be sent: ${problems.map((x) => x.reason).join(' ')}`;
+      const err = ids.length === 1 && /another team/.test(problems[0].reason) ? forbidden(msg) : conflict(msg);
+      err.details = { problems };
+      throw err;
     }
 
+    let batch = null;
+    if (assets.length > 1) {
+      ({ rows: [batch] } = await c.query(
+        `INSERT INTO transfer_batches (sender_id, recipient_id, to_facility_id, reason, asset_count) VALUES ($1,$2,$3,$4,$5) RETURNING id, batch_no`,
+        [req.user.id, rcpt.id, fac.id, b.reason || null, assets.length]));
+    }
     const acceptBy = new Date(Date.now() + config.transferAcceptHours * 3600 * 1000);
-    const { rows: [t] } = await c.query(
-      `INSERT INTO transfers (asset_id, from_facility_id, to_facility_id, sender_id, recipient_id, reason, accept_by, from_status, from_custodian_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, transfer_no`,
-      [a.id, a.current_facility_id, fac.id, req.user.id, rcpt.id, b.reason || null, acceptBy, a.status, a.custodian_id]);
-    await c.query(`UPDATE assets SET status = 'in_transit', version = version + 1 WHERE id = $1`, [a.id]);
-    await event(c, a.id, 'transfer_initiated', req.user.id, {
-      from_facility_id: a.current_facility_id, to_facility_id: fac.id, from_custodian_id: a.custodian_id, to_custodian_id: rcpt.id,
-      from_status: a.status, to_status: 'in_transit', transfer_id: t.id, details: { transfer_no: t.transfer_no, reason: b.reason || null },
-    });
+    const out = [];
+    for (const a of assets) {
+      const { rows: [t] } = await c.query(
+        `INSERT INTO transfers (asset_id, from_facility_id, to_facility_id, sender_id, recipient_id, reason, accept_by, from_status, from_custodian_id, batch_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id, transfer_no`,
+        [a.id, a.current_facility_id, fac.id, req.user.id, rcpt.id, b.reason || null, acceptBy, a.status, a.custodian_id, batch?.id || null]);
+      await c.query(`UPDATE assets SET status = 'in_transit', version = version + 1 WHERE id = $1`, [a.id]);
+      await event(c, a.id, 'transfer_initiated', req.user.id, {
+        from_facility_id: a.current_facility_id, to_facility_id: fac.id, from_custodian_id: a.custodian_id, to_custodian_id: rcpt.id,
+        from_status: a.status, to_status: 'in_transit', transfer_id: t.id,
+        details: { transfer_no: t.transfer_no, reason: b.reason || null, ...(batch ? { shipment_no: batch.batch_no, shipment_size: assets.length } : {}) },
+      });
+      out.push({ ...t, asset: a });
+    }
     if (rcpt.id !== req.user.id) {
-      await notifyUsers(c, [rcpt.id], {
-        kind: 'transfer_incoming', title: `Incoming: ${a.reference}`,
-        body: `${req.user.full_name} is sending ${assetCode(a.asset_no)} to you at ${fac.name}. Scan it when it arrives to confirm receipt.`,
-        asset_id: a.id, transfer_id: t.id, link: '/receive', dedupe_key: `incoming:${t.id}`,
+      const one = out[0];
+      await notifyUsers(c, [rcpt.id], batch ? {
+        kind: 'transfer_incoming', title: `Incoming: ${assets.length} trays from ${req.user.full_name}`,
+        body: `Shipment S-${batch.batch_no} to ${fac.name}: ${assets.slice(0, 4).map((a) => a.reference).join(', ')}${assets.length > 4 ? ` and ${assets.length - 4} more` : ''}. Scan each one when it arrives.`,
+        link: '/receive', dedupe_key: `incoming-batch:${batch.id}`,
+      } : {
+        kind: 'transfer_incoming', title: `Incoming: ${one.asset.reference}`,
+        body: `${req.user.full_name} is sending ${assetCode(one.asset.asset_no)} to you at ${fac.name}. Scan it when it arrives to confirm receipt.`,
+        asset_id: one.asset.id, transfer_id: one.id, link: '/receive', dedupe_key: `incoming:${one.id}`,
       });
     }
-    return t;
+    return { ids: out.map((t) => t.id), batch };
   });
-  const { rows: [full] } = await query(`${TRANSFER_SELECT} WHERE t.id = $1`, [transfer.id]);
-  res.status(201).json({ transfer: tag(full) });
+  const { rows } = await query(`${TRANSFER_SELECT} WHERE t.id = ANY($1) ORDER BY t.transfer_no`, [created.ids]);
+  const transfers = rows.map(tag);
+  res.status(201).json({ transfer: transfers[0], transfers, shipment: created.batch });
 });
 
 // ---------------------------------------------------------------------

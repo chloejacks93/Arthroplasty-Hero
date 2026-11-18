@@ -200,6 +200,8 @@ The source data showed that a catalog + serial identifies an **instrument set, n
 - If it arrived somewhere other than planned, the recipient picks the actual facility and must add a note, and management is alerted.
 - **Not received** closes the transfer, marks the tray **Under Investigation**, opens an investigation linked to the transfer, and notifies the sender and management.
 
+**Multi-tray shipments:** on *Transfer*, keep scanning; each tray is added to a list (duplicates, other teams' trays and trays already in transit are refused with a message). Choose destination and receiver once → **Start transfer of N trays**. All-or-nothing: if any tray can't go, nothing is sent and the problem trays are marked. The receiver gets **one** notification. On *Receive*, trays are grouped by shipment (*S-12 · 2 of 3 received*) and **each scan confirms that tray immediately**; set *Receiving at* once if the shipment arrived somewhere else (note required, management notified). Every tray keeps its own transfer, receipt and history, so a missing tray is tracked individually.
+
 **Cancel:** sender or management, with a required reason, before receipt. The asset returns to its previous status and the recipient is notified.
 
 **Overdue:** each transfer has a receipt deadline (`TRANSFER_ACCEPT_HOURS`, default 24). A background sweep every 15 minutes sends one reminder per day to the recipient, the sender and management. Overdue transfers are flagged across the app and counted on the dashboard.
