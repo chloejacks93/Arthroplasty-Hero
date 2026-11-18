@@ -974,3 +974,5 @@ table.data tbody tr.selected { background: #f1f5fd; }
   .ul-head { flex-wrap: wrap; }
   .ul-count { margin-left: 0; width: 100%; padding-left: 46px; }
 }
+.why-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+@media (max-width: 640px) { .why-form { grid-template-columns: minmax(0, 1fr); } }

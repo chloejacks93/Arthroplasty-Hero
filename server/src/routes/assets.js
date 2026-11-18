@@ -6,6 +6,7 @@ import { tx } from '../db.js';
 import { can } from '../lib/roles.js';
 import { audit } from '../lib/audit.js';
 import { event } from '../lib/importCommit.js';
+import { statusFor } from '../lib/importEngine.js';
 import { assetScope, assetCode } from '../lib/roles.js';
 
 const router = Router();
@@ -161,6 +162,52 @@ router.get('/unlinked', async (req, res) => {
   });
 });
 
+// Why is this asset Missing / Under Investigation? Derived from open
+// investigations, or else from the event that last set that status.
+async function statusReason(asset, openInvestigations) {
+  if (!['missing', 'under_investigation'].includes(asset.status)) return null;
+  if (openInvestigations.length) {
+    const i = openInvestigations[0];
+    return { kind: 'investigation', investigation_id: i.id, case_ref: i.case_ref, investigation_kind: i.kind };
+  }
+  const { rows: [e] } = await query(
+    `SELECT e.event_type, e.occurred_at, e.details, u.full_name AS actor_name, i.filename
+       FROM asset_events e JOIN users u ON u.id = e.actor_id LEFT JOIN imports i ON i.id = e.import_id
+      WHERE e.asset_id = $1 AND e.to_status = $2 ORDER BY e.occurred_at DESC, e.id DESC LIMIT 1`, [asset.id, asset.status]);
+  if (!asset.current_facility_id) {
+    return { kind: 'no_location', source: e?.details?.source === 'spreadsheet' ? 'import' : null,
+      filename: e?.details?.filename || e?.filename || null, row: e?.details?.row || null, source_location: asset.source_location || null };
+  }
+  if (e) return { kind: 'event', event_type: e.event_type, actor_name: e.actor_name, occurred_at: e.occurred_at };
+  return { kind: 'unknown' };
+}
+
+const locateSchema = z.object({ facility_id: z.uuid(), note: z.string().trim().max(300).optional() });
+
+// Place an asset that has NO recorded location (e.g. imported without one).
+// Assets that already have a location move only by transfer or investigation.
+router.post('/:id/locate', async (req, res) => {
+  if (!can.viewAll(req.user)) throw forbidden('Only inventory, management and administrators can set a location.');
+  const id = parse(z.uuid(), req.params.id);
+  const b = parse(locateSchema, req.body);
+  await tx(async (c) => {
+    const { rows: [a] } = await c.query('SELECT * FROM assets WHERE id = $1 AND retired_at IS NULL FOR UPDATE', [id]);
+    if (!a) throw notFound('Asset not found.');
+    if (a.current_facility_id) throw badRequest('This asset already has a location. Use Transfer, or resolve an investigation, to change it.');
+    const { rowCount: openInv } = await c.query(`SELECT 1 FROM investigations WHERE asset_id = $1 AND status IN ('open','investigating')`, [id]);
+    if (openInv) throw badRequest('This asset has an open investigation. Resolve it from the investigation page, which can set the location.');
+    const { rows: [f] } = await c.query('SELECT id, name, facility_type FROM facilities WHERE id = $1 AND active', [b.facility_id]);
+    if (!f) throw badRequest('Choose an active facility.');
+    const status = statusFor(f.facility_type);
+    await c.query('UPDATE assets SET current_facility_id = $2, status = $3, version = version + 1 WHERE id = $1', [id, f.id, status]);
+    await event(c, id, 'location_corrected', req.user.id, {
+      to_facility_id: f.id, from_status: a.status, to_status: status,
+      details: { reason: 'Location set (none was recorded)', note: b.note || null },
+    });
+  });
+  res.json({ ok: true });
+});
+
 router.get('/:id', async (req, res) => {
   const id = parse(z.uuid(), req.params.id);
   const scope = assetScope(req.user, 2);
@@ -210,6 +257,7 @@ router.get('/:id', async (req, res) => {
   res.json({
     asset, events: events.rows, transfers: transfers.rows, sources: sources.rows, conflicts: conflicts.rows,
     investigations: investigations.rows, openTransfer,
+    statusReason: await statusReason(asset, investigations.rows),
   });
 });
 

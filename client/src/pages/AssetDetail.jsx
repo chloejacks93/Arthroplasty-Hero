@@ -39,7 +39,7 @@ export default function AssetDetail() {
     );
   }
   if (loading && !data) return <div className="center-fill"><div className="spinner" /></div>;
-  const { asset: a, events, transfers, sources, conflicts, investigations = [], openTransfer } = data;
+  const { asset: a, events, transfers, sources, conflicts, investigations = [], openTransfer, statusReason } = data;
   const me = meta?.me?.id;
 
   return (
@@ -71,6 +71,9 @@ export default function AssetDetail() {
             {openTransfer.overdue ? ' Past its receipt deadline.' : ` Awaiting receipt by ${fmtDateTime(openTransfer.accept_by)}.`}{' '}
             <Link to={`/transfers?status=any`}>Transfers</Link></span>
         </div>
+      )}
+      {statusReason && statusReason.kind !== 'investigation' && (
+        <WhyStatus a={a} r={statusReason} canFix={!!meta?.permissions.investigate} facilities={meta?.facilities || []} onFixed={reload} />
       )}
       {investigations.map((iv) => (
         <div key={iv.id} className="notice red" style={{ marginBottom: 16 }}>
@@ -369,5 +372,62 @@ function AssignmentModal({ a, meta, onClose, onSaved }) {
         {err && <div className="form-error span2">{err}</div>}
       </div>
     </Modal>
+  );
+}
+
+const WHY_EVENT = {
+  transfer_rejected: 'A transfer of this tray was reported “not received”.',
+  problem_reported: 'A problem was reported for this tray.',
+  status_changed: 'Its status was changed.',
+  created: 'It was registered with this status.',
+};
+
+function WhyStatus({ a, r, canFix, facilities, onFixed }) {
+  const [open, setOpen] = useState(false);
+  const [fac, setFac] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const save = async () => {
+    setBusy(true); setErr('');
+    try { await api.post(`/assets/${a.id}/locate`, { facility_id: fac, note: note || undefined }); setOpen(false); onFixed(); }
+    catch (e) { setErr(e.message); setBusy(false); }
+  };
+  let text;
+  if (r.kind === 'no_location') {
+    text = r.source === 'import'
+      ? <>No location is recorded. It was imported from <strong>{r.filename}</strong>{r.row ? ` (row ${r.row})` : ''} {r.source_location ? <>with Location “{r.source_location}”, which wasn’t matched to a facility</> : 'with a blank Location'}.</>
+      : <>No location is recorded for this tray.</>;
+  } else if (r.kind === 'event') {
+    text = <>{WHY_EVENT[r.event_type] || 'Its status was set.'} By {r.actor_name}, {fmtDateTime(r.occurred_at)}.</>;
+  } else {
+    text = <>The reason wasn’t recorded.</>;
+  }
+  return (
+    <div className="notice amber why" style={{ marginBottom: 16 }}>
+      <AlertTriangle aria-hidden />
+      <div style={{ display: 'grid', gap: 8, width: '100%' }}>
+        <span><strong>Why {a.status === 'missing' ? 'Missing' : 'Under Investigation'}:</strong> {text}
+          {r.kind === 'no_location' && ' Once it has a location, it shows as At Facility or At Warehouse.'}</span>
+        {r.kind === 'no_location' && canFix && !open && (
+          <div><button className="btn btn-sm" onClick={() => setOpen(true)}><MapPin aria-hidden /> Set location</button></div>
+        )}
+        {r.kind === 'no_location' && !canFix && <span className="muted">Ask inventory or management to set its location, or transfer it to where it is.</span>}
+        {open && (
+          <div className="why-form">
+            <select className="select" value={fac} onChange={(e) => setFac(e.target.value)} aria-label="Where is it?">
+              <option value="">Where is it now?</option>
+              {facilities.map((f) => <option key={f.id} value={f.id}>{f.name} · {FACILITY_TYPE[f.facility_type]}</option>)}
+            </select>
+            <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" />
+            <div className="seg">
+              <button className="btn btn-sm" onClick={() => setOpen(false)} disabled={busy}>Cancel</button>
+              <button className="btn btn-sm btn-primary" onClick={save} disabled={busy || !fac}>Save location</button>
+            </div>
+            {err && <div className="form-error">{err}</div>}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
