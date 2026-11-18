@@ -149,7 +149,7 @@ function UserModal({ user, teams, onClose, onSaved }) {
 
 function SecretModal({ s, onClose }) {
   const [copied, setCopied] = useState(false);
-  const text = `Asset Control sign-in\nEmail: ${s.email}\nTemporary password: ${s.password}\n${window.location.origin}`;
+  const text = `Arthroplasty Hero sign-in\nEmail: ${s.email}\nTemporary password: ${s.password}\n${window.location.origin}`;
   const copy = async () => { try { await navigator.clipboard.writeText(text); setCopied(true); } catch { setCopied(false); } };
   return (
     <Modal title={s.reset ? 'New temporary password' : 'Person added'} onClose={onClose} actions={<button className="btn btn-primary" onClick={onClose}>Done</button>}>

@@ -16,7 +16,7 @@ await pool.query(`SELECT email, (locked_until > now()) AS locked FROM users WHER
 
 const app = createApp();
 const server = app.listen(config.port, () => {
-  console.log(`[server] Arthroplasty Asset Control listening on :${config.port} (${config.env})`);
+  console.log(`[server] Arthroplasty Hero listening on :${config.port} (${config.env})`);
 });
 
 // Expired-session cleanup, hourly.

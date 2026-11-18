@@ -28,8 +28,8 @@ export default function Login() {
         <div className="brand">
           <BrandMark />
           <div className="brand-text">
-            <strong>Asset Control</strong>
-            <span>Arthroplasty Operations</span>
+            <strong>Arthroplasty <em className="brand-hero">Hero</em></strong>
+            <span>Tray &amp; tote control</span>
           </div>
         </div>
         <div className="auth-pitch">
@@ -47,7 +47,7 @@ export default function Login() {
         <div className="auth-card">
           <div className="auth-mobile-brand">
             <BrandMark size={30} />
-            <strong>Asset Control</strong>
+            <strong>Arthroplasty <em className="brand-hero">Hero</em></strong>
           </div>
           <h1>Sign in</h1>
           <p>Use your company email and password.</p>

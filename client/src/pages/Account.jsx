@@ -46,7 +46,7 @@ export function ForcePasswordChange() {
     <div className="auth" style={{ gridTemplateColumns: 'minmax(0,1fr)' }}>
       <main className="auth-main">
         <div className="auth-card">
-          <div className="auth-mobile-brand" style={{ display: 'flex' }}><BrandMark size={30} /><strong>Asset Control</strong></div>
+          <div className="auth-mobile-brand" style={{ display: 'flex' }}><BrandMark size={30} /><strong>Arthroplasty <em className="brand-hero">Hero</em></strong></div>
           <h1>Set your password</h1>
           <p>Welcome, {user.full_name.split(' ')[0]}. Replace the temporary password you were given to continue.</p>
           <PasswordForm onDone={refresh} submitLabel="Save and continue" />

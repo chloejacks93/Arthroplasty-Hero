@@ -1,4 +1,4 @@
-# Arthroplasty Asset Control
+# Arthroplasty Hero
 
 A single system of record for every Arthroplasty tray, implant tote and set: where it is, who is responsible for it, where it has been, and who moved it.
 

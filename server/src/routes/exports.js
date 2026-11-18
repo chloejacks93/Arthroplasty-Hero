@@ -60,7 +60,7 @@ router.get('/assets.xlsx', async (req, res) => {
       ORDER BY upper(a.reference), a.asset_no`, params);
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Arthroplasty Asset Control';
+  wb.creator = 'Arthroplasty Hero';
   wb.created = new Date();
   const ws = wb.addWorksheet('Master Assets', { views: [{ state: 'frozen', ySplit: 1, xSplit: 3 }] });
   ws.columns = COLUMNS.map(([header, key, width, numFmt]) => ({ header, key, width, style: numFmt ? { numFmt } : {} }));

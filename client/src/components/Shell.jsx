@@ -49,8 +49,8 @@ export function Shell() {
         <div className="brand">
           <BrandMark />
           <div className="brand-text">
-            <strong>Asset Control</strong>
-            <span>Arthroplasty Operations</span>
+            <strong>Arthroplasty <em className="brand-hero">Hero</em></strong>
+            <span>Tray &amp; tote control</span>
           </div>
         </div>
         <nav className="nav">
