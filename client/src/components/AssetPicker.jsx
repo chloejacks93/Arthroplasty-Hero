@@ -26,7 +26,6 @@ export function AssetPicker({ onPick, allowOutOfScope = false, hint }) {
       } else if (!r.asset.in_scope && !allowOutOfScope) {
         setMsg(`${r.asset.reference} belongs to another team (${r.asset.team_name || 'unassigned'}). Use “Report a problem” if you have it.`);
       } else {
-        beep.ok();
         onPick(r.asset, { scan: r });
         return;
       }

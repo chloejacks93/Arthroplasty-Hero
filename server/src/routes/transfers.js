@@ -37,6 +37,22 @@ const TRANSFER_SELECT = `
 
 const tag = (r) => ({ ...r, asset_code: assetCode(r.asset_no) });
 
+/**
+ * If the receiving facility has a "team for trays received here", switch the
+ * asset to that team. Returns { from, to } team names when it changed.
+ */
+async function applyReceivingTeam(c, assetId, facilityId) {
+  const { rows: [x] } = await c.query(
+    `SELECT f.receiving_team_id, nt.name AS new_team, a.team_id, ot.name AS old_team
+       FROM facilities f JOIN assets a ON a.id = $1
+       LEFT JOIN teams nt ON nt.id = f.receiving_team_id AND nt.active
+       LEFT JOIN teams ot ON ot.id = a.team_id
+      WHERE f.id = $2`, [assetId, facilityId]);
+  if (!x?.receiving_team_id || !x.new_team || x.team_id === x.receiving_team_id) return null;
+  await c.query('UPDATE assets SET team_id = $2 WHERE id = $1', [assetId, x.receiving_team_id]);
+  return { from: x.old_team, to: x.new_team };
+}
+
 // ---------------------------------------------------------------------
 // List
 // ---------------------------------------------------------------------
@@ -120,7 +136,9 @@ router.post('/', async (req, res) => {
       const { rows: [open] } = await c.query(
         `SELECT t.transfer_no, u.full_name FROM transfers t JOIN users u ON u.id = t.recipient_id WHERE t.asset_id = $1 AND t.status = 'in_transit'`, [a.id]);
       if (open) { problems.push({ asset_id: id, reference: a.reference, reason: `${label} is already in transit to ${open.full_name} (T-${open.transfer_no}). It must be received or cancelled first.` }); continue; }
-      if (fac.id === a.current_facility_id && rcpt.id === (a.custodian_id || a.assigned_rep_id) && a.status !== 'missing') {
+      // Same place, same person is pointless, except for a warehouse: checking trays
+      // back in there must always work (it may also switch their team).
+      if (fac.facility_type !== 'warehouse' && fac.id === a.current_facility_id && rcpt.id === (a.custodian_id || a.assigned_rep_id) && a.status !== 'missing') {
         problems.push({ asset_id: id, reference: a.reference, reason: `${label} is already at ${fac.name} with ${rcpt.full_name}.` });
         continue;
       }
@@ -168,10 +186,11 @@ router.post('/', async (req, res) => {
           `UPDATE assets SET status = $2, current_facility_id = $3, custodian_id = $4, last_transferred_at = now(),
                   last_scanned_at = CASE WHEN $5 THEN now() ELSE last_scanned_at END, version = version + 1
             WHERE id = $1`, [a.id, newStatus, fac.id, req.user.id, viaScan]);
+        const teamChange = await applyReceivingTeam(c, a.id, fac.id);
         await event(c, a.id, 'transfer_received', req.user.id, {
           from_facility_id: a.current_facility_id, to_facility_id: fac.id, from_custodian_id: a.custodian_id, to_custodian_id: req.user.id,
           from_status: 'in_transit', to_status: newStatus, transfer_id: t.id,
-          details: { transfer_no: t.transfer_no, via_qr_scan: viaScan, one_step_return: true, note },
+          details: { transfer_no: t.transfer_no, via_qr_scan: viaScan, one_step_return: true, note, ...(teamChange ? { team: teamChange } : {}) },
         });
       }
       out.push({ ...t, asset: a });
@@ -237,11 +256,12 @@ router.post('/:id/receive', async (req, res) => {
       `UPDATE assets SET status = $2, current_facility_id = $3, custodian_id = $4, last_transferred_at = now(),
               last_scanned_at = CASE WHEN $5 THEN now() ELSE last_scanned_at END, version = version + 1
         WHERE id = $1`, [a.id, newStatus, fac.id, req.user.id, viaScan]);
+    const teamChange = await applyReceivingTeam(c, a.id, fac.id);
     await event(c, a.id, 'transfer_received', req.user.id, {
       from_facility_id: t.from_facility_id, to_facility_id: fac.id, from_custodian_id: t.from_custodian_id, to_custodian_id: req.user.id,
       from_status: 'in_transit', to_status: newStatus, transfer_id: id,
       details: {
-        transfer_no: t.transfer_no, via_qr_scan: viaScan, note: b.note || null,
+        transfer_no: t.transfer_no, via_qr_scan: viaScan, note: b.note || null, ...(teamChange ? { team: teamChange } : {}),
         ...(fac.id !== t.to_facility_id ? { planned_facility_id: t.to_facility_id, received_elsewhere: true } : {}),
       },
     });

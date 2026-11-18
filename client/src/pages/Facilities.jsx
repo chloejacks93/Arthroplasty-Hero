@@ -91,6 +91,7 @@ export function FacilityDetail() {
             {(fac.address_line || fac.city) && <span><MapPin aria-hidden />{[fac.address_line, fac.city, fac.state, fac.postal_code].filter(Boolean).join(', ')}</span>}
             {fac.phone && <span><Phone aria-hidden />{fac.phone}</span>}
             <span><Users aria-hidden />{c.reps} rep{c.reps === 1 ? '' : 's'} with assets here</span>
+            {fac.receiving_team_name && <span><Users aria-hidden />Trays received here join <strong>{fac.receiving_team_name}</strong></span>}
           </div>
         </div>
         {data.canEdit && (
@@ -193,10 +194,11 @@ function Crumbs({ name }) {
 
 export function FacilityModal({ facility, onClose, onSaved }) {
   const isNew = !facility.id;
+  const meta = useMeta();
   const [form, setForm] = useState({
     name: facility.name || '', facility_type: facility.facility_type || 'hospital', code: facility.code || '',
     address_line: facility.address_line || '', city: facility.city || '', state: facility.state || '', postal_code: facility.postal_code || '',
-    phone: facility.phone || '', notes: facility.notes || '',
+    phone: facility.phone || '', notes: facility.notes || '', receiving_team_id: facility.receiving_team_id || '',
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -217,6 +219,12 @@ export function FacilityModal({ facility, onClose, onSaved }) {
         <div className="field span2"><label htmlFor="fa">Address</label><input id="fa" className="input" value={form.address_line} onChange={set('address_line')} /></div>
         <div className="field"><label htmlFor="fci">City</label><input id="fci" className="input" value={form.city} onChange={set('city')} /></div>
         <div className="field"><label htmlFor="fs">State · ZIP</label><div style={{ display: 'flex', gap: 6 }}><input id="fs" className="input" value={form.state} onChange={set('state')} style={{ width: 70 }} /><input aria-label="ZIP" className="input" value={form.postal_code} onChange={set('postal_code')} /></div></div>
+        <div className="field span2"><label htmlFor="frt">Team for trays received here</label>
+          <select id="frt" className="select" value={form.receiving_team_id} onChange={set('receiving_team_id')}>
+            <option value="">Keep each tray’s current team</option>
+            {meta?.teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          <span className="subtle" style={{ fontSize: 12 }}>When a tray is received here (by transfer or return), it switches to this team automatically.</span></div>
         <div className="field span2"><label htmlFor="fp">Phone</label><input id="fp" className="input" type="tel" value={form.phone} onChange={set('phone')} /></div>
         <div className="field span2"><label htmlFor="fno">Notes <span className="subtle">(loading dock, sterile processing contact…)</span></label><textarea id="fno" className="input textarea" rows={2} value={form.notes} onChange={set('notes')} /></div>
         {err && <div className="form-error span2">{err}</div>}

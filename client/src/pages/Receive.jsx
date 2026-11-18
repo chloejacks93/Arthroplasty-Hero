@@ -36,7 +36,7 @@ export default function Receive() {
 
   const say = (tone, text, sound = true) => {
     setFlash({ tone, text, at: Date.now() });
-    if (sound) { if (tone === 'green') beep.ok(); else beep.error(); }
+    if (sound && tone !== 'green') beep.error(); // the scanner already beeped on capture
   };
   const elsewhere = !!where;
 

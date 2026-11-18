@@ -33,7 +33,7 @@ export default function Scan() {
     setError('');
     try {
       const r = await api.post('/qr/scan', { value, source });
-      if (r.status === 'matched') beep.ok(); else beep.error();
+      if (r.status !== 'matched') beep.error(); // capture beep already played
       setResult(r);
       setPhase('result');
     } catch (e) {
@@ -83,7 +83,7 @@ export default function Scan() {
             <div className="panel scan-hint">
               <ScanLine aria-hidden />
               <strong>Ready to scan</strong>
-              <span>Hold the phone 10–20 cm from the label. The result appears here automatically.</span>
+              <span>Hold the phone about 20–30 cm (8–12 in) from the label. It beeps the moment it reads it.</span>
             </div>
           )}
           {phase === 'loading' && <div className="panel scan-hint"><div className="spinner" /><span>Looking up code…</span></div>}

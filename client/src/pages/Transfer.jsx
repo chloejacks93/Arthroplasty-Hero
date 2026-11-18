@@ -38,7 +38,7 @@ export default function Transfer() {
 
   const say = (tone, text) => {
     setFlash({ tone, text, at: Date.now() });
-    if (tone === 'green') beep.ok(); else beep.error();
+    if (tone !== 'green') beep.error(); // the scanner already beeped on capture
   };
 
   const add = useCallback((a, via = 'search') => {

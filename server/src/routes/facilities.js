@@ -58,7 +58,8 @@ router.get('/', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
   const id = parse(z.uuid(), req.params.id);
-  const { rows: [fac] } = await query('SELECT * FROM facilities WHERE id = $1', [id]);
+  const { rows: [fac] } = await query(
+    'SELECT f.*, t.name AS receiving_team_name FROM facilities f LEFT JOIN teams t ON t.id = f.receiving_team_id WHERE f.id = $1', [id]);
   if (!fac) throw notFound('Facility not found.');
   const c = countsSql(req.user, 2);
   const scope = assetScope(req.user, 2);
@@ -102,9 +103,16 @@ const schema = z.object({
   postal_code: z.string().trim().max(20).nullable().optional(),
   phone: z.string().trim().max(40).nullable().optional(),
   notes: z.string().trim().max(1000).nullable().optional(),
+  receiving_team_id: z.uuid().nullable().optional(),
   active: z.boolean().optional(),
 });
-const FIELDS = ['name', 'facility_type', 'code', 'address_line', 'city', 'state', 'postal_code', 'phone', 'notes', 'active'];
+const FIELDS = ['name', 'facility_type', 'code', 'address_line', 'city', 'state', 'postal_code', 'phone', 'notes', 'receiving_team_id', 'active'];
+
+async function checkTeam(c, teamId) {
+  if (!teamId) return;
+  const { rowCount } = await c.query('SELECT 1 FROM teams WHERE id = $1 AND active', [teamId]);
+  if (!rowCount) throw conflict('Choose an active team.');
+}
 
 async function nameTaken(c, name, exceptId) {
   const { rowCount } = await c.query('SELECT 1 FROM facilities WHERE lower(btrim(name)) = lower(btrim($1)) AND id <> coalesce($2, gen_random_uuid())', [name, exceptId || null]);
@@ -116,6 +124,7 @@ router.post('/', async (req, res) => {
   const b = parse(schema, req.body);
   const row = await tx(async (c) => {
     await nameTaken(c, b.name);
+    await checkTeam(c, b.receiving_team_id);
     const keys = FIELDS.filter((f) => f !== 'active' && b[f] !== undefined);
     const { rows: [r] } = await c.query(
       `INSERT INTO facilities (${keys.join(', ')}) VALUES (${keys.map((_, i) => `$${i + 1}`).join(', ')}) RETURNING *`,
@@ -134,6 +143,7 @@ router.patch('/:id', async (req, res) => {
     const { rows: [cur] } = await c.query('SELECT * FROM facilities WHERE id = $1 FOR UPDATE', [id]);
     if (!cur) throw notFound('Facility not found.');
     if (b.name) await nameTaken(c, b.name, id);
+    await checkTeam(c, b.receiving_team_id);
     if (b.active === false && cur.active) {
       const { rows: [n] } = await c.query(
         `SELECT (SELECT count(*)::int FROM assets WHERE current_facility_id = $1 AND retired_at IS NULL) AS assets,

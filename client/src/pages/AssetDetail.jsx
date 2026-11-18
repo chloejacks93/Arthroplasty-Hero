@@ -144,6 +144,7 @@ export default function AssetDetail() {
                               : e.to_facility ? ` · ${e.to_facility}` : e.from_facility ? ` · from ${e.from_facility}` : ''}
                             {e.to_custodian && e.to_custodian !== e.from_custodian
                               ? (e.event_type === 'transfer_initiated' ? ` · To: ${e.to_custodian}` : ` · Custodian: ${e.to_custodian}`) : ''}
+                            {e.details?.team ? ` · Team: ${e.details.team.from || '—'} → ${e.details.team.to}` : ''}
                           </div>
                         </div>
                         <span className="t-when" title={fmtDateTime(e.occurred_at)}>{fmtDateTime(e.occurred_at)}</span>

@@ -233,3 +233,34 @@ test('one-step warehouse return: inventory/management returning trays themselves
   assert.equal(ev[1].details.one_step_return, true);
   assert.equal((await M.get('/api/transfers?box=incoming')).body.items.length, 0, 'nothing left to receive');
 });
+
+test('warehouse check-in allowed even if already there; receiving team switches the tray’s team on arrival', async () => {
+  const north = (await one(`SELECT id FROM teams WHERE name = 'North'`)).id;
+  const south = (await one(`SELECT id FROM teams WHERE name = 'South'`)).id;
+  // Configure "team for trays received here" on the warehouse (admin-only field via API).
+  await pool.query('UPDATE facilities SET receiving_team_id = $2 WHERE id = $1', [wh, south]);
+  // A tray already at the warehouse with the manager: previously refused, now allowed.
+  const a = (await one(
+    `INSERT INTO assets (reference, team_id, current_facility_id, status, custodian_id) VALUES ('HOME 1', $1, $2, 'at_warehouse', $3) RETURNING id`,
+    [north, wh, mgr])).id;
+  const r = await post(M, '/api/transfers', { asset_ids: [a], to_facility_id: wh, recipient_id: mgr, receive_now: true });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal((await one('SELECT team_id FROM assets WHERE id = $1', [a])).team_id, south, 'team switched on one-step return');
+  const ev = await one(`SELECT details FROM asset_events WHERE asset_id = $1 AND event_type = 'transfer_received'`, [a]);
+  assert.deepEqual(ev.details.team, { from: 'North', to: 'South' });
+
+  // Normal rep receipt at the warehouse also switches the team.
+  const b2 = (await one(
+    `INSERT INTO assets (reference, team_id, current_facility_id, status) VALUES ('HOME 2', $1, $2, 'at_facility') RETURNING id`, [north, h1])).id;
+  const t = await post(A, '/api/transfers', { asset_id: b2, to_facility_id: wh, recipient_id: repB });
+  assert.equal(t.status, 201);
+  assert.equal((await post(B, `/api/transfers/${t.body.transfer.id}/receive`, {})).status, 200);
+  assert.equal((await one('SELECT team_id FROM assets WHERE id = $1', [b2])).team_id, south);
+
+  // Non-warehouse same-place-same-person is still refused.
+  const c3 = (await one(
+    `INSERT INTO assets (reference, team_id, current_facility_id, status, custodian_id) VALUES ('HOSP 3', $1, $2, 'at_facility', $3) RETURNING id`,
+    [north, h1, repA])).id;
+  assert.equal((await post(A, '/api/transfers', { asset_id: c3, to_facility_id: h1, recipient_id: repA })).status, 409);
+  await pool.query('UPDATE facilities SET receiving_team_id = NULL WHERE id = $1', [wh]);
+});
